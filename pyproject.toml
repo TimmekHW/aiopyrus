@@ -28,18 +28,18 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Application Frameworks",
     "Typing :: Typed",
 ]
-
-[project.urls]
-Homepage = "https://github.com/TimmekHW/aiopyrus"
-Documentation = "https://github.com/TimmekHW/aiopyrus#readme"
-Changelog = "https://github.com/TimmekHW/aiopyrus/releases"
-Issues = "https://github.com/TimmekHW/aiopyrus/issues"
 dependencies = [
     "httpx>=0.27.0",
     "pydantic>=2.0.0",
     "aiohttp>=3.9.0",
     "aiofiles>=23.0.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/TimmekHW/aiopyrus"
+Documentation = "https://github.com/TimmekHW/aiopyrus#readme"
+Changelog = "https://github.com/TimmekHW/aiopyrus/releases"
+Issues = "https://github.com/TimmekHW/aiopyrus/issues"
 
 [project.optional-dependencies]
 dev = [
