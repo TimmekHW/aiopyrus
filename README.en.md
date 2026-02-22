@@ -5,6 +5,55 @@ Aiogram-style architecture. Powered by HTTPX.
 
 > **[Русская версия](README.md)**
 
+## Two Modes of Operation
+
+### UserClient — scripts under your own account
+
+Task automation, data exports, bulk operations — **under your own Pyrus account**.
+No bot registration needed, no public server required.
+
+```python
+import asyncio
+from aiopyrus import UserClient
+
+async def main():
+    async with UserClient(login="user@example.com", security_key="KEY") as client:
+        profile = await client.get_profile()
+        print(f"Hello, {profile.first_name}!")
+
+        ctx = await client.task_context(12345678)
+        print(ctx.get("Task Status", "not set"))
+
+asyncio.run(main())
+```
+
+### PyrusBot — webhook / polling bot
+
+Incoming task processing, automatic approvals, routing — aiogram-style.
+
+```python
+bot = PyrusBot(login="bot@example", security_key="SECRET")
+dp = Dispatcher()
+```
+
+> More about bots — [below](#webhook-bot).
+
+---
+
+## How to Get Your security_key
+
+1. In Pyrus, click **Settings** (gear icon, bottom left)
+2. Go to **Authorization** ([pyrus.com/t#authorize](https://pyrus.com/t#authorize))
+3. Copy the **Secret API Key**
+
+Now you can run scripts under your own account:
+
+```python
+client = UserClient(login="you@company.com", security_key="<your key>")
+```
+
+---
+
 ## Key Feature — TaskContext
 
 Work with tasks using **field names as they appear in the Pyrus UI** — no `field_id`, `choice_id`, or `person_id` needed.
@@ -27,23 +76,6 @@ pip install aiopyrus
 ```
 
 Python 3.10+
-
-## Quick Start
-
-```python
-import asyncio
-from aiopyrus import UserClient
-
-async def main():
-    async with UserClient(login="user@example.com", security_key="KEY") as client:
-        profile = await client.get_profile()
-        print(f"Hello, {profile.first_name}!")
-
-        ctx = await client.task_context(12345678)
-        print(ctx.get("Task Status", "not set"))
-
-asyncio.run(main())
-```
 
 ## TaskContext — Method Reference
 

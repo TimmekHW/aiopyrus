@@ -5,6 +5,55 @@
 
 > **[English version](README.en.md)**
 
+## Два режима работы
+
+### UserClient — скрипты от своего имени
+
+Автоматизация задач, выгрузки, массовые операции — **от имени вашего аккаунта Pyrus**.
+Не нужно регистрировать бота, не нужен публичный сервер.
+
+```python
+import asyncio
+from aiopyrus import UserClient
+
+async def main():
+    async with UserClient(login="user@example.com", security_key="KEY") as client:
+        profile = await client.get_profile()
+        print(f"Привет, {profile.first_name}!")
+
+        ctx = await client.task_context(12345678)
+        print(ctx.get("Статус задачи", "не задан"))
+
+asyncio.run(main())
+```
+
+### PyrusBot — бот на вебхуках / polling
+
+Обработка входящих задач, автоматическое согласование, роутинг — aiogram-style.
+
+```python
+bot = PyrusBot(login="bot@example", security_key="SECRET")
+dp = Dispatcher()
+```
+
+> Подробнее о ботах — [ниже](#бот-на-вебхуках).
+
+---
+
+## Где взять security_key
+
+1. В Pyrus нажмите **Настройки** (шестерёнка слева внизу)
+2. Перейдите в **Авторизация** ([pyrus.com/t#authorize](https://pyrus.com/t#authorize))
+3. Скопируйте **Секретный API ключ**
+
+Теперь можно запускать скрипты от своего имени:
+
+```python
+client = UserClient(login="you@company.com", security_key="<скопированный ключ>")
+```
+
+---
+
 ## Главная фишка — TaskContext
 
 Работайте с задачами **по именам полей из интерфейса Pyrus** — без знания `field_id`, `choice_id`, `person_id`.
@@ -27,23 +76,6 @@ pip install aiopyrus
 ```
 
 Python 3.10+
-
-## Быстрый старт
-
-```python
-import asyncio
-from aiopyrus import UserClient
-
-async def main():
-    async with UserClient(login="user@example.com", security_key="KEY") as client:
-        profile = await client.get_profile()
-        print(f"Привет, {profile.first_name}!")
-
-        ctx = await client.task_context(12345678)
-        print(ctx.get("Статус задачи", "не задан"))
-
-asyncio.run(main())
-```
 
 ## TaskContext — справочник методов
 
