@@ -85,7 +85,9 @@ class Dispatcher(Router):
         """
         if verify_signature:
             if not raw_body or not signature:
-                raise PyrusWebhookSignatureError("raw_body and signature are required for verification.")
+                raise PyrusWebhookSignatureError(
+                    "raw_body and signature are required for verification."
+                )
             if not bot.verify_signature(raw_body, signature):
                 raise PyrusWebhookSignatureError("Webhook signature verification failed.")
 
@@ -178,15 +180,18 @@ class Dispatcher(Router):
 
         log.info(
             "Polling started: form_id=%d  steps=%s  interval=%.0fs  skip_old=%s",
-            form_id, step_list, interval, skip_old,
+            form_id,
+            step_list,
+            interval,
+            skip_old,
         )
 
         # task_id → last_modified_date string (tracks what we've already processed)
         seen: dict[int, str] = {}
         is_first_poll = True
 
-        _BACKOFF_BASE = 5.0    # first retry after 5 s
-        _BACKOFF_MAX  = 300.0  # cap at 5 min
+        _BACKOFF_BASE = 5.0  # first retry after 5 s
+        _BACKOFF_MAX = 300.0  # cap at 5 min
         backoff = _BACKOFF_BASE
 
         try:
@@ -211,15 +216,15 @@ class Dispatcher(Router):
                             task=task,
                         )
                         try:
-                            await self.process_event(
-                                payload, bot, middlewares=self._middlewares
-                            )
+                            await self.process_event(payload, bot, middlewares=self._middlewares)
                         except Exception:
                             log.exception("Handler error for task_id=%d", task.id)
 
                     if is_first_poll:
                         if skip_old:
-                            log.info("Snapshot taken: %d tasks recorded, waiting for changes", len(seen))
+                            log.info(
+                                "Snapshot taken: %d tasks recorded, waiting for changes", len(seen)
+                            )
                         is_first_poll = False
 
                 except asyncio.CancelledError:

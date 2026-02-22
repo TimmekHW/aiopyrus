@@ -12,6 +12,7 @@ The simplest way to start working with aiopyrus.
   - Оставить комментарий через ctx.answer()
     / Leave a comment via ctx.answer()
 """
+
 import asyncio
 
 from aiopyrus import UserClient
@@ -28,7 +29,6 @@ async def main() -> None:
     # Контекстный менеджер — соединение закрывается автоматически
     # Context manager — connection is closed automatically
     async with UserClient(login=LOGIN, security_key=SECURITY_KEY) as client:
-
         # ── Кто я? / Who am I? ──────────────────────────────────────────
         profile = await client.get_profile()
         print(f"Привет, {profile.first_name}!")  # Hello, ...!

@@ -18,6 +18,7 @@ Handlers (@router.task_received) are the same as in webhook mode.
   - ModifiedAfterFilter — per-handler защита от повторной обработки
   - Настройка rate limiting — не превысить лимиты API
 """
+
 import asyncio
 import logging
 
@@ -42,8 +43,8 @@ log = logging.getLogger(__name__)
 BOT_LOGIN = "bot@example"
 SECURITY_KEY = "YOUR_BOT_SECURITY_KEY"
 
-FORM_ID = 321    # Форма которую опрашиваем / Form to poll
-POLL_STEP = 2    # Шаг / Step
+FORM_ID = 321  # Форма которую опрашиваем / Form to poll
+POLL_STEP = 2  # Шаг / Step
 
 
 # ── Обработчики / Handlers ───────────────────────────────────────────────────
@@ -58,7 +59,7 @@ router = Router(name="main")
 @router.task_received(
     FormFilter(FORM_ID),
     StepFilter(POLL_STEP),
-    ModifiedAfterFilter(),                              # только свежие / only fresh
+    ModifiedAfterFilter(),  # только свежие / only fresh
     FieldValueFilter(field_name="Статус", value=None),  # поле пустое / field is empty
 )
 async def on_unprocessed(ctx: TaskContext) -> None:
@@ -77,6 +78,7 @@ async def on_fallback(ctx: TaskContext) -> None:
 
 # ── Хуки жизненного цикла / Lifecycle hooks ──────────────────────────────────
 
+
 async def on_startup() -> None:
     log.info("Бот запущен. Опрашиваем форму %d, шаг %d", FORM_ID, POLL_STEP)
     log.info("Bot started. Polling form %d, step %d", FORM_ID, POLL_STEP)
@@ -93,8 +95,8 @@ bot = PyrusBot(
     security_key=SECURITY_KEY,
     # Rate limiting — важно при polling, чтобы не превысить лимиты API
     # Rate limiting — important for polling to stay within API limits
-    requests_per_minute=30,        # не более 30 запросов в минуту / max 30 req/min
-    requests_per_10min=4000,       # с запасом от лимита 5000 / buffer below 5000 limit
+    requests_per_minute=30,  # не более 30 запросов в минуту / max 30 req/min
+    requests_per_10min=4000,  # с запасом от лимита 5000 / buffer below 5000 limit
 )
 
 dp = Dispatcher()
@@ -105,10 +107,10 @@ if __name__ == "__main__":
         dp.start_polling(
             bot,
             form_id=FORM_ID,
-            steps=POLL_STEP,         # фильтр на уровне реестра / register-level filter
-            interval=30.0,           # секунды между запросами / seconds between polls
-            skip_old=True,           # True = snapshot при старте, False = обработать бэклог
-                                     # True = snapshot on start, False = process backlog
+            steps=POLL_STEP,  # фильтр на уровне реестра / register-level filter
+            interval=30.0,  # секунды между запросами / seconds between polls
+            skip_old=True,  # True = snapshot при старте, False = обработать бэклог
+            # True = snapshot on start, False = process backlog
             on_startup=on_startup,
             on_shutdown=on_shutdown,
         )

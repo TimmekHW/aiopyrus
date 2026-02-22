@@ -20,6 +20,7 @@ as they appear in Pyrus. No IDs, choice_ids, or person_ids needed.
   - ctx.log_time()         — трекинг времени
   - ctx.reply()            — ответить на комментарий
 """
+
 import asyncio
 
 from aiopyrus import UserClient
@@ -30,10 +31,11 @@ SECURITY_KEY = "YOUR_SECURITY_KEY"
 # ID задач для демонстрации. Подставьте реальные.
 # Task IDs for demonstration. Replace with real ones.
 HELPDESK_TASK_ID = 12345678  # IT-заявка / IT request form task
-PAYMENT_TASK_ID = 12345679   # Платёж / Payment approval form task
+PAYMENT_TASK_ID = 12345679  # Платёж / Payment approval form task
 
 
 # ── 1. Чтение полей / Reading fields ────────────────────────────────────────
+
 
 async def demo_reading(client: UserClient) -> None:
     """Все способы чтения полей / All field reading methods."""
@@ -44,8 +46,8 @@ async def demo_reading(client: UserClient) -> None:
     # ctx["Поле"] — KeyError если поле не найдено
     # ctx["Field"] — raises KeyError if field not found
     try:
-        problem_type = ctx["Тип проблемы"]       # multiple_choice -> str
-        executor = ctx["Исполнитель"]             # person field -> "Имя Фамилия"
+        problem_type = ctx["Тип проблемы"]  # multiple_choice -> str
+        executor = ctx["Исполнитель"]  # person field -> "Имя Фамилия"
         print(f"Тип проблемы: {problem_type}")
         print(f"Исполнитель: {executor}")
     except KeyError as e:
@@ -66,7 +68,7 @@ async def demo_reading(client: UserClient) -> None:
     # ctx.find("%wildcard%") — поиск по маске (% = любые символы, как SQL LIKE)
     # ctx.find("%wildcard%") — wildcard search (% = any chars, SQL LIKE style)
     desc = ctx.find("%описан%", "нет описания")  # содержит "описан" / contains
-    cat = ctx.find("Категория%")                  # начинается с / starts with
+    cat = ctx.find("Категория%")  # начинается с / starts with
     print(f"Описание (wildcard): {desc}")
     print(f"Категория (wildcard): {cat}")
 
@@ -75,6 +77,7 @@ async def demo_reading(client: UserClient) -> None:
 
 
 # ── 2. Запись полей / Writing fields ─────────────────────────────────────────
+
 
 async def demo_writing(client: UserClient) -> None:
     """Ленивая запись и отправка / Lazy write and send."""
@@ -86,9 +89,9 @@ async def demo_writing(client: UserClient) -> None:
     # ctx.set() — lazy write. Nothing is sent until answer()/approve()/...
     # Строки автоматически резолвятся: имя варианта -> choice_id, имя -> person_id
     # Strings auto-resolve: choice name -> choice_id, person name -> person_id
-    ctx.set("Статус задачи", "В работе")        # multiple_choice: имя -> choice_id
+    ctx.set("Статус задачи", "В работе")  # multiple_choice: имя -> choice_id
     ctx.set("Исполнитель", "Данил Колбасенко")  # person: имя -> person_id
-    ctx.set("Номер кейса", "INC-001")           # text: как есть / as-is
+    ctx.set("Номер кейса", "INC-001")  # text: как есть / as-is
 
     # ctx.set() возвращает self — можно чейнить
     # ctx.set() returns self — chainable
@@ -111,6 +114,7 @@ async def demo_writing(client: UserClient) -> None:
 
 
 # ── 3. Согласование / Approval flow ─────────────────────────────────────────
+
 
 async def demo_approval(client: UserClient) -> None:
     """Согласование, завершение, переназначение / Approval, finish, reassign."""
@@ -148,6 +152,7 @@ async def demo_approval(client: UserClient) -> None:
 
 # ── 4. Трекинг и ответы / Time tracking and replies ─────────────────────────
 
+
 async def demo_time_and_replies(client: UserClient) -> None:
     """Трекинг времени и ответы на комментарии / Time tracking and replies."""
     print("\n== Трекинг и ответы / Time tracking and replies ==")
@@ -171,6 +176,7 @@ async def demo_time_and_replies(client: UserClient) -> None:
 
 
 # ── Запуск / Run ─────────────────────────────────────────────────────────────
+
 
 async def main() -> None:
     async with UserClient(login=LOGIN, security_key=SECURITY_KEY) as client:

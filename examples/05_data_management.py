@@ -16,6 +16,7 @@ Run manually or on a schedule (cron / Task Scheduler).
   - Файлы            — upload, download, attach / Files
   - Объявления       — list, create, comment / Announcements
 """
+
 import asyncio
 
 from aiopyrus import UserClient
@@ -25,13 +26,14 @@ SECURITY_KEY = "YOUR_SECURITY_KEY"
 
 # Подставьте реальные ID / Replace with real IDs
 FORM_REQUESTS = 321  # форма "Заявки" / Requests form
-FORM_TASKS = 322     # форма "Задачи" / Tasks form
-CATALOG_ID = 999     # справочник / catalog
+FORM_TASKS = 322  # форма "Задачи" / Tasks form
+CATALOG_ID = 999  # справочник / catalog
 
 
 # =============================================================================
 # 1. Реестр задач / Task register
 # =============================================================================
+
 
 async def demo_register(client: UserClient) -> None:
     print("\n== Реестр / Register ==")
@@ -60,16 +62,19 @@ async def demo_register(client: UserClient) -> None:
     # Parallel search across multiple forms
     # search_tasks() запускает get_register() для каждой формы через asyncio.gather
     # search_tasks() runs get_register() for each form via asyncio.gather
-    all_tasks = await client.search_tasks({
-        FORM_REQUESTS: [1, 2, 3],  # форма -> шаги / form -> steps
-        FORM_TASKS: None,          # None = все шаги / None = all steps
-    })
+    all_tasks = await client.search_tasks(
+        {
+            FORM_REQUESTS: [1, 2, 3],  # форма -> шаги / form -> steps
+            FORM_TASKS: None,  # None = все шаги / None = all steps
+        }
+    )
     print(f"Итого по двум формам: {len(all_tasks)}")
 
 
 # =============================================================================
 # 2. Каталоги / Catalogs
 # =============================================================================
+
 
 async def demo_catalogs(client: UserClient) -> None:
     print("\n== Каталоги / Catalogs ==")
@@ -127,6 +132,7 @@ async def demo_catalogs(client: UserClient) -> None:
 # 3. Участники / Members
 # =============================================================================
 
+
 async def demo_members(client: UserClient) -> None:
     print("\n== Участники / Members ==")
 
@@ -165,6 +171,7 @@ async def demo_members(client: UserClient) -> None:
 # 4. Роли / Roles
 # =============================================================================
 
+
 async def demo_roles(client: UserClient) -> None:
     print("\n== Роли / Roles ==")
 
@@ -183,6 +190,7 @@ async def demo_roles(client: UserClient) -> None:
 # =============================================================================
 # 5. Файлы / Files
 # =============================================================================
+
 
 async def demo_files(client: UserClient) -> None:
     print("\n== Файлы / Files ==")
@@ -207,6 +215,7 @@ async def demo_files(client: UserClient) -> None:
 # 6. Объявления / Announcements
 # =============================================================================
 
+
 async def demo_announcements(client: UserClient) -> None:
     print("\n== Объявления / Announcements ==")
 
@@ -223,6 +232,7 @@ async def demo_announcements(client: UserClient) -> None:
 # =============================================================================
 # Запуск / Run
 # =============================================================================
+
 
 async def main() -> None:
     async with UserClient(login=LOGIN, security_key=SECURITY_KEY) as client:

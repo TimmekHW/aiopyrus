@@ -15,16 +15,15 @@ class Filter(ABC):
     """
 
     @abstractmethod
-    async def __call__(self, payload: "WebhookPayload") -> bool | dict:
-        ...
+    async def __call__(self, payload: WebhookPayload) -> bool | dict: ...
 
-    def __and__(self, other: "Filter") -> "AndFilter":
+    def __and__(self, other: Filter) -> AndFilter:
         return AndFilter(self, other)
 
-    def __or__(self, other: "Filter") -> "OrFilter":
+    def __or__(self, other: Filter) -> OrFilter:
         return OrFilter(self, other)
 
-    def __invert__(self) -> "NotFilter":
+    def __invert__(self) -> NotFilter:
         return NotFilter(self)
 
 
@@ -32,7 +31,7 @@ class AndFilter(Filter):
     def __init__(self, *filters: Filter) -> None:
         self._filters = filters
 
-    async def __call__(self, payload: "WebhookPayload") -> bool | dict:
+    async def __call__(self, payload: WebhookPayload) -> bool | dict:
         result: dict = {}
         for f in self._filters:
             r = await f(payload)
@@ -47,7 +46,7 @@ class OrFilter(Filter):
     def __init__(self, *filters: Filter) -> None:
         self._filters = filters
 
-    async def __call__(self, payload: "WebhookPayload") -> bool | dict:
+    async def __call__(self, payload: WebhookPayload) -> bool | dict:
         for f in self._filters:
             r = await f(payload)
             if r:
@@ -59,6 +58,6 @@ class NotFilter(Filter):
     def __init__(self, inner: Filter) -> None:
         self._inner = inner
 
-    async def __call__(self, payload: "WebhookPayload") -> bool:
+    async def __call__(self, payload: WebhookPayload) -> bool:
         result = await self._inner(payload)
         return not result

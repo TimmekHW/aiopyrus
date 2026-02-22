@@ -1,19 +1,17 @@
 from __future__ import annotations
 
-from typing import Optional
-
 from .base import PyrusModel
 
 
 class CatalogHeader(PyrusModel):
     name: str
-    type: Optional[str] = None
+    type: str | None = None
 
 
 class CatalogItem(PyrusModel):
     item_id: int
     values: list[str]
-    deleted: Optional[bool] = None
+    deleted: bool | None = None
 
 
 class Catalog(PyrusModel):
@@ -21,8 +19,8 @@ class Catalog(PyrusModel):
 
     catalog_id: int
     name: str
-    version: Optional[int] = None
-    deleted: Optional[bool] = None
+    version: int | None = None
+    deleted: bool | None = None
     catalog_headers: list[CatalogHeader] = []
     items: list[CatalogItem] = []
 
@@ -38,7 +36,7 @@ class CatalogSyncResult(PyrusModel):
     """Response from POST /catalogs/{id} or POST /catalogs/{id}/diff."""
 
     catalog_id: int
-    applied: Optional[bool] = None
+    applied: bool | None = None
     added: list[CatalogItem] = []
     updated: list[CatalogItem] = []
     deleted: list[CatalogItem] = []

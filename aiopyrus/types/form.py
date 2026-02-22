@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 from .base import PyrusModel
 from .file import Attachment
@@ -39,6 +39,7 @@ class FieldType(str, Enum):
 # Typed value models for complex fields
 # ---------------------------------------------------------------------------
 
+
 class CatalogFieldValue(PyrusModel):
     """Value structure for ``catalog`` fields.
 
@@ -48,61 +49,62 @@ class CatalogFieldValue(PyrusModel):
     """
 
     # Single selection (also present in multi as the first id for compat)
-    item_id: Optional[int] = None
+    item_id: int | None = None
     # Multi-selection
-    item_ids: Optional[list[int]] = None
+    item_ids: list[int] | None = None
     # Write by name instead of id
-    item_name: Optional[str] = None
+    item_name: str | None = None
     # Read-only display data
-    headers: Optional[list[str]] = None
-    values: Optional[list[str]] = None          # first selected row values
-    rows: Optional[list[list[str]]] = None      # all selected rows values
+    headers: list[str] | None = None
+    values: list[str] | None = None  # first selected row values
+    rows: list[list[str]] | None = None  # all selected rows values
 
 
 class MultipleChoiceValue(PyrusModel):
     """Value structure for ``multiple_choice`` fields."""
 
-    choice_id: Optional[int] = None         # singular selection shortcut (API compat)
-    choice_ids: Optional[list[int]] = None
-    choice_names: Optional[list[str]] = None
-    fields: Optional[list["FormField"]] = None  # sub-fields tied to the choice
+    choice_id: int | None = None  # singular selection shortcut (API compat)
+    choice_ids: list[int] | None = None
+    choice_names: list[str] | None = None
+    fields: list[FormField] | None = None  # sub-fields tied to the choice
 
 
 class TitleValue(PyrusModel):
     """Value structure for ``title`` (section header) fields."""
 
-    checkmark: Optional[str] = None    # "checked" | "unchecked" | None
-    fields: Optional[list["FormField"]] = None
+    checkmark: str | None = None  # "checked" | "unchecked" | None
+    fields: list[FormField] | None = None
 
 
 class FormLinkValue(PyrusModel):
     """Value structure for ``form_link`` fields."""
 
-    task_ids: Optional[list[int]] = None
-    subject: Optional[str] = None
+    task_ids: list[int] | None = None
+    subject: str | None = None
 
 
 class TableRow(PyrusModel):
     """One row inside a ``table`` field value."""
 
     row_id: int
-    position: Optional[int] = None
-    cells: list["FormField"] = []
+    position: int | None = None
+    cells: list[FormField] = []
     # Write-only: set to True to delete this row
-    delete: Optional[bool] = None
+    delete: bool | None = None
 
 
 # ---------------------------------------------------------------------------
 # FormField
 # ---------------------------------------------------------------------------
 
+
 class FormField(PyrusModel):
     """A single field in a form task (both definition and value)."""
 
     id: int
-    type: Optional[FieldType] = None
-    name: Optional[str] = None
-    code: Optional[str] = None
+    type: FieldType | None = None
+    name: str | None = None
+    code: str | None = None
 
     # Raw value — type depends on ``type``:
     #   text/money/number/date/time/email/phone/note/step/status/creation_date → str | int | float
@@ -116,40 +118,40 @@ class FormField(PyrusModel):
     #   title            → dict (use as_title())
     #   form_link        → dict (use as_form_link())
     #   table            → list[dict] (use as_table_rows())
-    value: Optional[Any] = None
+    value: Any | None = None
 
     # Present on due_date / due_date_time fields
-    duration: Optional[str] = None
+    duration: str | None = None
 
     # Present on cells inside a table row
-    parent_id: Optional[int] = None
-    row_id: Optional[int] = None
+    parent_id: int | None = None
+    row_id: int | None = None
 
     # Catalog reference (from form definition)
-    catalog_id: Optional[int] = None
+    catalog_id: int | None = None
 
     # Form definition metadata (returned in GET /forms/{id})
-    info: Optional[dict] = None
-    required_step: Optional[int] = None
-    immutable_step: Optional[int] = None
+    info: dict | None = None
+    required_step: int | None = None
+    immutable_step: int | None = None
 
     # UI hint shown on hover in the Pyrus interface
-    tooltip: Optional[str] = None
+    tooltip: str | None = None
 
     # Default value pre-filled by Pyrus (common on multiple_choice / catalog)
-    default_value: Optional[str] = None
+    default_value: str | None = None
 
     # Present on address composite subfields — points to the parent composite field
-    related_field_id: Optional[int] = None
+    related_field_id: int | None = None
 
     # Conditional visibility rule (complex nested structure — kept as raw dict)
-    visibility_condition: Optional[dict] = None
+    visibility_condition: dict | None = None
 
     # -----------------------------------------------------------------------
     # Typed accessors
     # -----------------------------------------------------------------------
 
-    def as_person(self) -> Optional[Person]:
+    def as_person(self) -> Person | None:
         """Interpret value as a Person (for ``person`` / ``author`` fields)."""
         if isinstance(self.value, dict):
             return Person.model_validate(self.value)
@@ -161,25 +163,25 @@ class FormField(PyrusModel):
             return [Attachment.model_validate(f) for f in self.value if isinstance(f, dict)]
         return []
 
-    def as_catalog(self) -> Optional[CatalogFieldValue]:
+    def as_catalog(self) -> CatalogFieldValue | None:
         """Interpret value as a CatalogFieldValue (for ``catalog`` fields)."""
         if isinstance(self.value, dict):
             return CatalogFieldValue.model_validate(self.value)
         return None
 
-    def as_multiple_choice(self) -> Optional[MultipleChoiceValue]:
+    def as_multiple_choice(self) -> MultipleChoiceValue | None:
         """Interpret value as a MultipleChoiceValue (for ``multiple_choice`` fields)."""
         if isinstance(self.value, dict):
             return MultipleChoiceValue.model_validate(self.value)
         return None
 
-    def as_title(self) -> Optional[TitleValue]:
+    def as_title(self) -> TitleValue | None:
         """Interpret value as a TitleValue (for ``title`` fields)."""
         if isinstance(self.value, dict):
             return TitleValue.model_validate(self.value)
         return None
 
-    def as_form_link(self) -> Optional[FormLinkValue]:
+    def as_form_link(self) -> FormLinkValue | None:
         """Interpret value as a FormLinkValue (for ``form_link`` fields)."""
         if isinstance(self.value, dict):
             return FormLinkValue.model_validate(self.value)
@@ -205,12 +207,13 @@ TableRow.model_rebuild()
 # Form definition models
 # ---------------------------------------------------------------------------
 
+
 class FormStep(PyrusModel):
     """A workflow step in a form."""
 
     step: int
     name: str
-    approvals: Optional[list[list[Person]]] = None
+    approvals: list[list[Person]] | None = None
 
 
 class PrintTemplate(PyrusModel):
@@ -236,17 +239,17 @@ class Form(PyrusModel):
     fields: list[FormField] = []
     print_forms: list[PrintTemplate] = []
     # API returns "deleted_or_closed" (form is archived/disabled)
-    deleted_or_closed: Optional[bool] = None
+    deleted_or_closed: bool | None = None
     # Система где folder то dict, то string, то хуй знает.
     # cloud: list[FormFolder] ({id, name}), corp: list[str].
-    folder: Optional[list[Any]] = None
+    folder: list[Any] | None = None
 
-    def get_field(self, field_id: int) -> Optional[FormField]:
+    def get_field(self, field_id: int) -> FormField | None:
         """Найти поле по id — включая вложенные в title секции через info['fields']."""
         return self._find_field(self.fields, field_id)
 
     @staticmethod
-    def _find_field(fields: list, field_id: int) -> Optional[FormField]:
+    def _find_field(fields: list, field_id: int) -> FormField | None:
         for field in fields:
             if field.id == field_id:
                 return field
@@ -260,7 +263,7 @@ class Form(PyrusModel):
         return None
 
     @staticmethod
-    def _find_in_dicts(items: list, field_id: int) -> Optional["FormField"]:
+    def _find_in_dicts(items: list, field_id: int) -> FormField | None:
         """Рекурсивный поиск в списке raw dict-ов из info['fields']."""
         for item in items:
             if not isinstance(item, dict):
@@ -278,4 +281,4 @@ class Form(PyrusModel):
 
 
 class FormPermissions(PyrusModel):
-    members: Optional[list[Any]] = None
+    members: list[Any] | None = None

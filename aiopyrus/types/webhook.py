@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Optional
-
 from .base import PyrusModel
 from .task import Task
 
@@ -15,7 +13,7 @@ class WebhookPayload(PyrusModel):
     event: str
     access_token: str = ""
     task_id: int
-    user_id: Optional[int] = None
+    user_id: int | None = None
     task: Task
 
     @property
@@ -34,20 +32,20 @@ class BotResponse(PyrusModel):
     All fields are optional — return an empty dict to do nothing inline.
     """
 
-    text: Optional[str] = None
-    action: Optional[str] = None  # "finished" | "reopened"
-    approval_choice: Optional[str] = None  # "approved" | "rejected" | ...
-    field_updates: Optional[list[dict]] = None
-    reassign_to: Optional[dict] = None
-    approvals_added: Optional[list[list[dict]]] = None
-    approvals_removed: Optional[list[dict]] = None
-    participants_added: Optional[list[dict]] = None
-    participants_removed: Optional[list[dict]] = None
-    due_date: Optional[str] = None
-    cancel_due: Optional[bool] = None
-    scheduled_date: Optional[str] = None
-    spent_minutes: Optional[int] = None
-    attachments: Optional[list[str]] = None  # list of GUIDs
+    text: str | None = None
+    action: str | None = None  # "finished" | "reopened"
+    approval_choice: str | None = None  # "approved" | "rejected" | ...
+    field_updates: list[dict] | None = None
+    reassign_to: dict | None = None
+    approvals_added: list[list[dict]] | None = None
+    approvals_removed: list[dict] | None = None
+    participants_added: list[dict] | None = None
+    participants_removed: list[dict] | None = None
+    due_date: str | None = None
+    cancel_due: bool | None = None
+    scheduled_date: str | None = None
+    spent_minutes: int | None = None
+    attachments: list[str] | None = None  # list of GUIDs
 
     def model_dump_clean(self) -> dict:
         """Dump only set (non-None) fields for the response body."""

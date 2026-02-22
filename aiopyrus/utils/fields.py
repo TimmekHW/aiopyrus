@@ -13,6 +13,7 @@
     ]
     await client.comment_task(task.id, field_updates=updates)
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
@@ -22,9 +23,21 @@ if TYPE_CHECKING:
 
 
 # Типы полей которые принимают строковое значение напрямую
-_TEXT_TYPES = {"text", "email", "phone", "note", "number", "money",
-               "date", "time", "due_date", "due_date_time", "step", "status",
-               "creation_date"}
+_TEXT_TYPES = {
+    "text",
+    "email",
+    "phone",
+    "note",
+    "number",
+    "money",
+    "date",
+    "time",
+    "due_date",
+    "due_date_time",
+    "step",
+    "status",
+    "creation_date",
+}
 
 
 class FieldUpdate:
@@ -83,7 +96,7 @@ class FieldUpdate:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def from_field(field: "FormField", value: Any) -> dict:
+    def from_field(field: FormField, value: Any) -> dict:
         """Автоматически определить формат по типу поля.
 
         Args:
@@ -130,7 +143,9 @@ class FieldUpdate:
             if isinstance(value, bool):
                 return FieldUpdate.checkmark(field.id, value)
             if isinstance(value, str):
-                return FieldUpdate.checkmark(field.id, value.lower() in ("checked", "true", "1", "да", "yes"))
+                return FieldUpdate.checkmark(
+                    field.id, value.lower() in ("checked", "true", "1", "да", "yes")
+                )
             raise ValueError(
                 f"Field {field.id!r} ({field.name!r}) is a checkmark — "
                 f"pass True/False or 'checked'/'unchecked', got {value!r}"
@@ -153,7 +168,7 @@ class FieldUpdate:
             # Accept int (person_id), Person object, or dict with 'id'
             if isinstance(value, int):
                 return FieldUpdate.person(field.id, value)
-            if hasattr(value, "id"):          # Person object
+            if hasattr(value, "id"):  # Person object
                 return FieldUpdate.person(field.id, value.id)
             if isinstance(value, dict) and "id" in value:
                 return FieldUpdate.person(field.id, value["id"])
@@ -168,8 +183,7 @@ class FieldUpdate:
             if isinstance(value, int):
                 return FieldUpdate.catalog(field.id, value)
             raise ValueError(
-                f"Field {field.id!r} ({field.name!r}) is a catalog field — "
-                f"pass item_id as int."
+                f"Field {field.id!r} ({field.name!r}) is a catalog field — pass item_id as int."
             )
 
         # Fallback for unknown / unsupported types

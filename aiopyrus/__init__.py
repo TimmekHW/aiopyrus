@@ -103,7 +103,15 @@ Full docs: ``aiopyrus.utils.context`` (module docstring).
 
 from .bot.bot import PyrusBot
 from .bot.dispatcher import Dispatcher
-from .bot.filters import F, FormFilter, StepFilter, ResponsibleFilter, TextFilter, EventFilter, FieldValueFilter
+from .bot.filters import (
+    EventFilter,
+    F,
+    FieldValueFilter,
+    FormFilter,
+    ResponsibleFilter,
+    StepFilter,
+    TextFilter,
+)
 from .bot.middleware import BaseMiddleware
 from .bot.router import Router
 from .exceptions import (

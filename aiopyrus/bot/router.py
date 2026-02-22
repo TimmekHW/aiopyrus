@@ -3,7 +3,8 @@ from __future__ import annotations
 import asyncio
 import inspect
 import logging
-from typing import TYPE_CHECKING, Any, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 from aiopyrus.bot.filters.base import Filter
 
@@ -21,7 +22,7 @@ class Handler:
         self.func = func
         self.filters = filters
 
-    async def check(self, payload: "WebhookPayload") -> dict | bool:
+    async def check(self, payload: WebhookPayload) -> dict | bool:
         """Run all filters. Returns merged extra-kwargs dict on pass, False on fail."""
         extra: dict = {}
         for f in self.filters:
@@ -32,7 +33,7 @@ class Handler:
                 extra.update(result)
         return extra or True
 
-    async def call(self, payload: "WebhookPayload", bot: "PyrusBot", extra: dict) -> Any:
+    async def call(self, payload: WebhookPayload, bot: PyrusBot, extra: dict) -> Any:
         """Invoke the handler, injecting only the parameters it accepts."""
         sig = inspect.signature(self.func)
         kwargs: dict[str, Any] = {}
@@ -47,6 +48,7 @@ class Handler:
             elif name == "ctx":
                 if ctx is None:
                     from aiopyrus.utils.context import TaskContext
+
                     ctx = TaskContext(payload.task, bot)
                 kwargs["ctx"] = ctx
             elif name in extra:
@@ -73,7 +75,7 @@ class Router:
     def __init__(self, name: str | None = None) -> None:
         self.name = name or "router"
         self._handlers: list[Handler] = []
-        self._sub_routers: list["Router"] = []
+        self._sub_routers: list[Router] = []
 
     # ------------------------------------------------------------------
     # Registration decorators
@@ -104,7 +106,7 @@ class Router:
     # Router nesting
     # ------------------------------------------------------------------
 
-    def include_router(self, router: "Router") -> None:
+    def include_router(self, router: Router) -> None:
         """Nest another router under this one."""
         self._sub_routers.append(router)
         log.debug("Router %r included into %r", router.name, self.name)
@@ -115,8 +117,8 @@ class Router:
 
     async def process_event(
         self,
-        payload: "WebhookPayload",
-        bot: "PyrusBot",
+        payload: WebhookPayload,
+        bot: PyrusBot,
         *,
         middlewares: list | tuple = (),
     ) -> Any:
@@ -139,8 +141,8 @@ class Router:
 
 async def _apply_middlewares(
     handler: Handler,
-    payload: "WebhookPayload",
-    bot: "PyrusBot",
+    payload: WebhookPayload,
+    bot: PyrusBot,
     extra: dict,
     middlewares: list | tuple,
 ) -> Any:
@@ -148,7 +150,7 @@ async def _apply_middlewares(
     if not middlewares:
         return await handler.call(payload, bot, extra)
 
-    async def call_next(pl: "WebhookPayload", b: "PyrusBot", data: dict) -> Any:
+    async def call_next(pl: WebhookPayload, b: PyrusBot, data: dict) -> Any:
         return await handler.call(pl, b, data)
 
     # Build the chain from innermost outward

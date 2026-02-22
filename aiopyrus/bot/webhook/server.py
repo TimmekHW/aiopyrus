@@ -18,8 +18,8 @@ log = logging.getLogger("aiopyrus.webhook")
 
 def create_app(
     *,
-    dispatcher: "Dispatcher",
-    bot: "PyrusBot",
+    dispatcher: Dispatcher,
+    bot: PyrusBot,
     path: str = "/",
     verify_signature: bool = True,
 ) -> web.Application:
@@ -35,8 +35,8 @@ def create_app(
 
 
 async def _webhook_handler(request: web.Request) -> web.Response:
-    dp: "Dispatcher" = request.app["dispatcher"]
-    bot: "PyrusBot" = request.app["bot"]
+    dp: Dispatcher = request.app["dispatcher"]
+    bot: PyrusBot = request.app["bot"]
     verify: bool = request.app["verify_signature"]
 
     raw_body = await request.read()
@@ -87,5 +87,3 @@ async def run_app(app: web.Application, *, host: str, port: int) -> None:
         await asyncio.Event().wait()  # run forever
     finally:
         await runner.cleanup()
-
-

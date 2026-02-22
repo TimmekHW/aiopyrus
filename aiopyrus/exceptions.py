@@ -8,7 +8,9 @@ class PyrusError(Exception):
 class PyrusAPIError(PyrusError):
     """Raised when the Pyrus API returns an error response."""
 
-    def __init__(self, error: str, error_code: str | None = None, status_code: int | None = None) -> None:
+    def __init__(
+        self, error: str, error_code: str | None = None, status_code: int | None = None
+    ) -> None:
         self.error = error
         self.error_code = error_code
         self.status_code = status_code

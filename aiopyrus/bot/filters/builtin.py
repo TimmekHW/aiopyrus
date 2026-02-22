@@ -3,8 +3,9 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
-from .base import Filter
 from aiopyrus.utils.context import _read_field
+
+from .base import Filter
 
 if TYPE_CHECKING:
     from aiopyrus.types.webhook import WebhookPayload
@@ -27,7 +28,7 @@ class FormFilter(Filter):
     def __init__(self, form_id: int | list[int]) -> None:
         self._ids: set[int] = {form_id} if isinstance(form_id, int) else set(form_id)
 
-    async def __call__(self, payload: "WebhookPayload") -> bool:
+    async def __call__(self, payload: WebhookPayload) -> bool:
         return payload.task.form_id in self._ids
 
 
@@ -43,7 +44,7 @@ class StepFilter(Filter):
     def __init__(self, step: int | list[int]) -> None:
         self._steps: set[int] = {step} if isinstance(step, int) else set(step)
 
-    async def __call__(self, payload: "WebhookPayload") -> bool:
+    async def __call__(self, payload: WebhookPayload) -> bool:
         return payload.task.current_step in self._steps
 
 
@@ -59,7 +60,7 @@ class ResponsibleFilter(Filter):
     def __init__(self, person_id: int | list[int]) -> None:
         self._ids: set[int] = {person_id} if isinstance(person_id, int) else set(person_id)
 
-    async def __call__(self, payload: "WebhookPayload") -> bool:
+    async def __call__(self, payload: WebhookPayload) -> bool:
         r = payload.task.responsible
         return r is not None and r.id in self._ids
 
@@ -77,7 +78,7 @@ class TextFilter(Filter):
         self._sub = substring if case_sensitive else substring.lower()
         self._case_sensitive = case_sensitive
 
-    async def __call__(self, payload: "WebhookPayload") -> bool:
+    async def __call__(self, payload: WebhookPayload) -> bool:
         text = payload.task.text or ""
         if not self._case_sensitive:
             text = text.lower()
@@ -96,7 +97,7 @@ class EventFilter(Filter):
     def __init__(self, *events: str) -> None:
         self._events = set(events)
 
-    async def __call__(self, payload: "WebhookPayload") -> bool:
+    async def __call__(self, payload: WebhookPayload) -> bool:
         return payload.event in self._events
 
 
@@ -137,7 +138,7 @@ class FieldValueFilter(Filter):
         self._field_name = field_name
         self._value = value
 
-    async def __call__(self, payload: "WebhookPayload") -> bool:
+    async def __call__(self, payload: WebhookPayload) -> bool:
         task = payload.task
         key: int | str | None = self._field_id or self._field_name
         if key is None:
@@ -188,7 +189,7 @@ class ModifiedAfterFilter(Filter):
     def __init__(self, since: datetime | None = None) -> None:
         self._since = _ensure_aware(since or datetime.now(timezone.utc))
 
-    async def __call__(self, payload: "WebhookPayload") -> bool:
+    async def __call__(self, payload: WebhookPayload) -> bool:
         ts = payload.task.last_modified_date
         if ts is None:
             return False
@@ -210,7 +211,7 @@ class CreatedAfterFilter(Filter):
     def __init__(self, since: datetime | None = None) -> None:
         self._since = _ensure_aware(since or datetime.now(timezone.utc))
 
-    async def __call__(self, payload: "WebhookPayload") -> bool:
+    async def __call__(self, payload: WebhookPayload) -> bool:
         ts = payload.task.create_date
         if ts is None:
             return False

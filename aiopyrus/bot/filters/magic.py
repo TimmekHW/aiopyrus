@@ -8,9 +8,11 @@ Examples::
     F.responsible.id == 12345
     (F.form_id == 321) & (F.current_step == 2)
 """
+
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 from .base import Filter
 
@@ -21,42 +23,42 @@ if TYPE_CHECKING:
 class MagicFilter(Filter):
     """Lazily-evaluated attribute-access filter on WebhookPayload.task."""
 
-    def __init__(self, accessor: Callable[["WebhookPayload"], Any]) -> None:
+    def __init__(self, accessor: Callable[[WebhookPayload], Any]) -> None:
         self._accessor = accessor
 
     # ------------------------------------------------------------------
     # Comparisons → new MagicFilter instances
     # ------------------------------------------------------------------
 
-    def __eq__(self, other: Any) -> "MagicFilter":  # type: ignore[override]
+    def __eq__(self, other: Any) -> MagicFilter:  # type: ignore[override]
         acc = self._accessor
         return MagicFilter(lambda p: acc(p) == other)
 
-    def __ne__(self, other: Any) -> "MagicFilter":  # type: ignore[override]
+    def __ne__(self, other: Any) -> MagicFilter:  # type: ignore[override]
         acc = self._accessor
         return MagicFilter(lambda p: acc(p) != other)
 
-    def __lt__(self, other: Any) -> "MagicFilter":
+    def __lt__(self, other: Any) -> MagicFilter:
         acc = self._accessor
         return MagicFilter(lambda p: acc(p) < other)
 
-    def __le__(self, other: Any) -> "MagicFilter":
+    def __le__(self, other: Any) -> MagicFilter:
         acc = self._accessor
         return MagicFilter(lambda p: acc(p) <= other)
 
-    def __gt__(self, other: Any) -> "MagicFilter":
+    def __gt__(self, other: Any) -> MagicFilter:
         acc = self._accessor
         return MagicFilter(lambda p: acc(p) > other)
 
-    def __ge__(self, other: Any) -> "MagicFilter":
+    def __ge__(self, other: Any) -> MagicFilter:
         acc = self._accessor
         return MagicFilter(lambda p: acc(p) >= other)
 
-    def contains(self, substring: str, *, case_sensitive: bool = False) -> "MagicFilter":
+    def contains(self, substring: str, *, case_sensitive: bool = False) -> MagicFilter:
         acc = self._accessor
         sub = substring if case_sensitive else substring.lower()
 
-        def _check(p: "WebhookPayload") -> bool:
+        def _check(p: WebhookPayload) -> bool:
             val = acc(p)
             if val is None:
                 return False
@@ -65,15 +67,15 @@ class MagicFilter(Filter):
 
         return MagicFilter(_check)
 
-    def in_(self, collection: Any) -> "MagicFilter":
+    def in_(self, collection: Any) -> MagicFilter:
         acc = self._accessor
         return MagicFilter(lambda p: acc(p) in collection)
 
-    def is_none(self) -> "MagicFilter":
+    def is_none(self) -> MagicFilter:
         acc = self._accessor
         return MagicFilter(lambda p: acc(p) is None)
 
-    def is_not_none(self) -> "MagicFilter":
+    def is_not_none(self) -> MagicFilter:
         acc = self._accessor
         return MagicFilter(lambda p: acc(p) is not None)
 
@@ -81,10 +83,10 @@ class MagicFilter(Filter):
     # Attribute navigation
     # ------------------------------------------------------------------
 
-    def __getattr__(self, name: str) -> "MagicFilter":
+    def __getattr__(self, name: str) -> MagicFilter:
         acc = self._accessor
 
-        def navigate(p: "WebhookPayload") -> Any:
+        def navigate(p: WebhookPayload) -> Any:
             obj = acc(p)
             return getattr(obj, name, None)
 
@@ -94,7 +96,7 @@ class MagicFilter(Filter):
     # Filter protocol
     # ------------------------------------------------------------------
 
-    async def __call__(self, payload: "WebhookPayload") -> bool:
+    async def __call__(self, payload: WebhookPayload) -> bool:
         try:
             result = self._accessor(payload)
             return bool(result)
@@ -106,13 +108,13 @@ class _F:
     """Entrypoint for magic filters: ``F.form_id == 321``."""
 
     def __getattr__(self, name: str) -> MagicFilter:
-        def accessor(p: "WebhookPayload") -> Any:
+        def accessor(p: WebhookPayload) -> Any:
             return getattr(p.task, name, None)
 
         return MagicFilter(accessor)
 
     # Also allow F.event == "comment" (top-level payload field)
-    def __call__(self, accessor: Callable[["WebhookPayload"], Any]) -> MagicFilter:
+    def __call__(self, accessor: Callable[[WebhookPayload], Any]) -> MagicFilter:
         return MagicFilter(accessor)
 
 

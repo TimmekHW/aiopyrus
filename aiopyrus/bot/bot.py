@@ -34,7 +34,8 @@ class PyrusBot(UserClient):
         requests_per_10min: int = 5000,
     ) -> None:
         super().__init__(
-            login, security_key,
+            login,
+            security_key,
             timeout=timeout,
             auth_url=auth_url,
             api_url=api_url,
@@ -87,12 +88,16 @@ class PyrusBot(UserClient):
 
     async def acknowledge(self, task_id: int, *, text: str | None = None) -> Task:
         """Acknowledge the task without approving/rejecting."""
-        return await self.comment_task(task_id, approval_choice=ApprovalChoice.acknowledged, text=text)
+        return await self.comment_task(
+            task_id, approval_choice=ApprovalChoice.acknowledged, text=text
+        )
 
     async def reassign(self, task_id: int, to: int | dict, *, text: str | None = None) -> Task:
         """Reassign the task to another person."""
         return await self.comment_task(task_id, reassign_to=to, text=text)
 
-    async def update_fields(self, task_id: int, updates: list[dict], *, text: str | None = None) -> Task:
+    async def update_fields(
+        self, task_id: int, updates: list[dict], *, text: str | None = None
+    ) -> Task:
         """Update form fields and optionally leave a comment."""
         return await self.comment_task(task_id, field_updates=updates, text=text)

@@ -251,12 +251,18 @@ class PyrusSession:
         if headers:
             req_headers.update(headers)
 
-        log.debug("→ %s %s  body=%s", method, url, list(json.keys()) if isinstance(json, dict) else json)
+        log.debug(
+            "→ %s %s  body=%s", method, url, list(json.keys()) if isinstance(json, dict) else json
+        )
 
         async def _do_request() -> httpx.Response:
             return await client.request(
-                method, url,
-                json=json, params=params, data=data, files=files,
+                method,
+                url,
+                json=json,
+                params=params,
+                data=data,
+                files=files,
                 headers=req_headers,
             )
 
@@ -289,7 +295,8 @@ class PyrusSession:
             wait = _retry_wait(response, default=5.0)
             log.warning(
                 "Transient proxy error %d, retrying in %.0fs …",
-                response.status_code, wait,
+                response.status_code,
+                wait,
             )
             await asyncio.sleep(wait)
             t0 = time.perf_counter()
@@ -303,7 +310,9 @@ class PyrusSession:
     async def get(self, path: str, *, params: dict | None = None) -> dict:
         return await self.request("GET", path, params=params)
 
-    async def post(self, path: str, *, json: Any = None, files: Any = None, data: Any = None) -> dict:
+    async def post(
+        self, path: str, *, json: Any = None, files: Any = None, data: Any = None
+    ) -> dict:
         return await self.request("POST", path, json=json, files=files, data=data)
 
     async def put(self, path: str, *, json: Any = None) -> dict:
@@ -316,7 +325,7 @@ class PyrusSession:
     # Context manager support
     # ------------------------------------------------------------------
 
-    async def __aenter__(self) -> "PyrusSession":
+    async def __aenter__(self) -> PyrusSession:
         await self._get_client()
         return self
 

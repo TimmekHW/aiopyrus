@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Awaitable, Callable
+from collections.abc import Awaitable, Callable
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from aiopyrus.bot.bot import PyrusBot
@@ -31,8 +32,7 @@ class BaseMiddleware(ABC):
     async def __call__(
         self,
         handler: HandlerType,
-        payload: "WebhookPayload",
-        bot: "PyrusBot",
+        payload: WebhookPayload,
+        bot: PyrusBot,
         data: dict[str, Any],
-    ) -> Any:
-        ...
+    ) -> Any: ...

@@ -9,11 +9,6 @@ from urllib.parse import urlparse
 
 import aiofiles
 
-log = logging.getLogger("aiopyrus.client")
-
-if TYPE_CHECKING:
-    from aiopyrus.utils.context import TaskContext
-
 from aiopyrus.api.session import PyrusSession
 from aiopyrus.types.catalog import Catalog, CatalogSyncResult
 from aiopyrus.types.file import UploadedFile
@@ -26,6 +21,11 @@ from aiopyrus.types.task import (
     TaskAction,
 )
 from aiopyrus.types.user import ContactsResponse, Person, Profile, Role
+
+if TYPE_CHECKING:
+    from aiopyrus.utils.context import TaskContext
+
+log = logging.getLogger("aiopyrus.client")
 
 
 class UserClient:
@@ -54,7 +54,9 @@ class UserClient:
         requests_per_10min: int = 5000,
     ) -> None:
         self._session = PyrusSession(
-            login, security_key, person_id,
+            login,
+            security_key,
+            person_id,
             timeout=timeout,
             auth_url=auth_url,
             api_url=api_url,
@@ -142,11 +144,12 @@ class UserClient:
             payload["fill_defaults"] = fill_defaults
         if approvals is not None:
             payload["approvals"] = [
-                [{"id": p} if isinstance(p, int) else p for p in step]
-                for step in approvals
+                [{"id": p} if isinstance(p, int) else p for p in step] for step in approvals
             ]
         if responsible is not None:
-            payload["responsible"] = {"id": responsible} if isinstance(responsible, int) else responsible
+            payload["responsible"] = (
+                {"id": responsible} if isinstance(responsible, int) else responsible
+            )
         if participants is not None:
             payload["participants"] = [{"id": p} if isinstance(p, int) else p for p in participants]
         if subscribers is not None:
@@ -240,9 +243,7 @@ class UserClient:
         if reply_to_comment_id is not None:
             payload["reply_note_id"] = reply_to_comment_id
         if action is not None:
-            payload["action"] = (
-                action.value if isinstance(action, TaskAction) else str(action)
-            )
+            payload["action"] = action.value if isinstance(action, TaskAction) else str(action)
         if approval_choice is not None:
             payload["approval_choice"] = (
                 approval_choice.value
@@ -256,7 +257,9 @@ class UserClient:
         if approvals_rerequested is not None:
             payload["approvals_rerequested"] = _persons(approvals_rerequested)
         if reassign_to is not None:
-            payload["reassign_to"] = {"id": reassign_to} if isinstance(reassign_to, int) else reassign_to
+            payload["reassign_to"] = (
+                {"id": reassign_to} if isinstance(reassign_to, int) else reassign_to
+            )
         if participants_added is not None:
             payload["participants_added"] = _persons(participants_added)
         if participants_removed is not None:
@@ -299,7 +302,9 @@ class UserClient:
         elif channel is not None:
             payload["channel"] = {"type": str(channel)}
         if comment_as_roles is not None:
-            payload["comment_as_roles"] = [{"id": r} if isinstance(r, int) else r for r in comment_as_roles]
+            payload["comment_as_roles"] = [
+                {"id": r} if isinstance(r, int) else r for r in comment_as_roles
+            ]
 
         data = await self._session.post(f"tasks/{task_id}/comments", json=payload)
         return Task.model_validate(data.get("task", data))
@@ -331,7 +336,9 @@ class UserClient:
 
     async def acknowledge_task(self, task_id: int, *, text: str | None = None) -> Task:
         """Acknowledge (ознакомился) the task without approval."""
-        return await self.comment_task(task_id, approval_choice=ApprovalChoice.acknowledged, text=text)
+        return await self.comment_task(
+            task_id, approval_choice=ApprovalChoice.acknowledged, text=text
+        )
 
     # ------------------------------------------------------------------
     # Inbox / Calendar
@@ -517,7 +524,7 @@ class UserClient:
         ]
         batches = await asyncio.gather(*coros, return_exceptions=True)
         result: list[Task] = []
-        for form_id, batch in zip(forms, batches):
+        for form_id, batch in zip(forms, batches, strict=True):
             if isinstance(batch, BaseException):
                 log.warning("search_tasks: form %d failed: %s", form_id, batch)
                 continue
@@ -655,7 +662,9 @@ class UserClient:
 
     async def set_form_permissions(self, form_id: int, permissions: dict) -> dict:
         """POST /forms/{form_id}/permissions — set user access levels."""
-        return await self._session.post(f"forms/{form_id}/permissions", json={"permissions": permissions})
+        return await self._session.post(
+            f"forms/{form_id}/permissions", json={"permissions": permissions}
+        )
 
     # ------------------------------------------------------------------
     # Catalogs
@@ -678,9 +687,7 @@ class UserClient:
         items: list[list[str]],
     ) -> Catalog:
         """PUT /catalogs — create a new catalog."""
-        catalog_headers = [
-            {"name": h} if isinstance(h, str) else h for h in headers
-        ]
+        catalog_headers = [{"name": h} if isinstance(h, str) else h for h in headers]
         catalog_items = [{"values": row} for row in items]
         data = await self._session.put(
             "catalogs",
@@ -827,7 +834,7 @@ class UserClient:
         members = await self.get_members()
         for m in members:
             full = f"{m.first_name} {m.last_name}".lower()
-            rev  = f"{m.last_name} {m.first_name}".lower()
+            rev = f"{m.last_name} {m.first_name}".lower()
             if (
                 query in full
                 or query in rev
@@ -848,7 +855,7 @@ class UserClient:
         result = []
         for m in members:
             full = f"{m.first_name} {m.last_name}".lower()
-            rev  = f"{m.last_name} {m.first_name}".lower()
+            rev = f"{m.last_name} {m.first_name}".lower()
             if (
                 query in full
                 or query in rev
@@ -859,7 +866,7 @@ class UserClient:
                 result.append(m)
         return result
 
-    async def task_context(self, task_id: int) -> "TaskContext":
+    async def task_context(self, task_id: int) -> TaskContext:
         """Получить задачу и вернуть TaskContext — aiogram-стайл обёртку.
 
         Shortcut для::
@@ -879,6 +886,7 @@ class UserClient:
             await ctx.approve("Обработка завершена")
         """
         from aiopyrus.utils.context import TaskContext
+
         task = await self.get_task(task_id)
         return TaskContext(task, self)
 
@@ -930,7 +938,14 @@ class UserClient:
         data = await self._session.post("roles", json=payload)
         return Role.model_validate(data)
 
-    async def update_role(self, role_id: int, *, name: str | None = None, member_ids: list[int] | None = None, banned: bool | None = None) -> Role:
+    async def update_role(
+        self,
+        role_id: int,
+        *,
+        name: str | None = None,
+        member_ids: list[int] | None = None,
+        banned: bool | None = None,
+    ) -> Role:
         """PUT /roles/{role_id}."""
         payload: dict[str, Any] = {}
         if name is not None:

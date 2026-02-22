@@ -20,7 +20,9 @@ Complete structure of a production-ready aiopyrus bot.
   Then configure the webhook URL in Pyrus:
     Настройки -> Боты -> ваш бот -> URL: https://your-host.example.com:8080/pyrus
 """
+
 import asyncio
+import contextlib
 import logging
 
 from aiopyrus import (
@@ -47,14 +49,15 @@ SECURITY_KEY = "YOUR_BOT_SECURITY_KEY"
 # ── ID форм и шагов (замените на свои) / Form and step IDs (replace) ─────────
 FORM_INVOICE = 321  # форма "Счета на оплату" / "Invoices" form
 FORM_SUPPORT = 322  # форма "IT-заявки" / "IT requests" form
-STEP_APPROVE = 2    # шаг "Согласование" / "Approval" step
-STEP_EXECUTE = 3    # шаг "Исполнение" / "Execution" step
+STEP_APPROVE = 2  # шаг "Согласование" / "Approval" step
+STEP_EXECUTE = 3  # шаг "Исполнение" / "Execution" step
 
 
 # =============================================================================
 # Middleware — выполняется вокруг каждого обработчика
 # Middleware — runs around every handler
 # =============================================================================
+
 
 class LoggingMiddleware(BaseMiddleware):
     """Логирует каждый входящий вебхук / Logs every incoming webhook."""
@@ -79,10 +82,8 @@ class ErrorNotifierMiddleware(BaseMiddleware):
             return await handler(payload, bot, data)
         except ValueError as exc:
             log.error("Handler error (task %d): %s", payload.task_id, exc)
-            try:
+            with contextlib.suppress(Exception):
                 await bot.comment_task(payload.task_id, text=f"[Ошибка бота] {exc}")
-            except Exception:
-                pass
             return None
 
 
@@ -200,7 +201,7 @@ dp.middleware(ErrorNotifierMiddleware())
 
 # Роутеры (порядок важен — первый совпавший обработчик выполняется)
 # Routers (order matters — first matching handler runs)
-dp.include_router(urgent_router)    # проверяется первым / checked first
+dp.include_router(urgent_router)  # проверяется первым / checked first
 dp.include_router(invoice_router)
 dp.include_router(support_router)
 

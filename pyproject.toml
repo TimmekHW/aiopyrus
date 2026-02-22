@@ -21,6 +21,7 @@ dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
     "respx>=0.21.0",
+    "ruff>=0.9.0",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -29,6 +30,14 @@ packages = ["aiopyrus"]
 [tool.pyright]
 pythonVersion = "3.10"
 typeCheckingMode = "standard"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+ignore = ["E501"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

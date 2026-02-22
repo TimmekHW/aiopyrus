@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Optional
 
 from .base import PyrusModel
 
 
 class PersonType(str, Enum):
     person = "person"
-    user = "user"       # corp instance который живёт по своим правилам
+    user = "user"  # corp instance который живёт по своим правилам
     role = "role"
     bot = "bot"
 
@@ -20,24 +19,24 @@ class Person(PyrusModel):
     first_name: str = ""
     last_name: str = ""
     # Name in the user's native language (e.g. Japanese / Chinese)
-    native_first_name: Optional[str] = None
-    native_last_name: Optional[str] = None
-    email: Optional[str] = None
-    type: Optional[PersonType] = PersonType.person
-    department_id: Optional[int] = None
-    department_name: Optional[str] = None
-    position: Optional[str] = None
+    native_first_name: str | None = None
+    native_last_name: str | None = None
+    email: str | None = None
+    type: PersonType | None = PersonType.person
+    department_id: int | None = None
+    department_name: str | None = None
+    position: str | None = None
     # Phones
-    phone: Optional[str] = None          # office phone
-    mobile_phone: Optional[str] = None
+    phone: str | None = None  # office phone
+    mobile_phone: str | None = None
     # Status
-    status: Optional[str] = None
-    locale: Optional[str] = None
+    status: str | None = None
+    locale: str | None = None
     # Employment / account state
-    fired: Optional[bool] = False        # terminated employee
-    banned: Optional[bool] = False       # account blocked by admin
+    fired: bool | None = False  # terminated employee
+    banned: bool | None = False  # account blocked by admin
     # Task delegation: tasks assigned to this person go to task_receiver instead
-    task_receiver: Optional[int] = None
+    task_receiver: int | None = None
 
     @property
     def full_name(self) -> str:
@@ -53,16 +52,16 @@ class Role(PyrusModel):
     id: int
     name: str
     member_ids: list[int] = []
-    fired: bool = False    # archived / deleted role
-    banned: bool = False   # disabled role
+    fired: bool = False  # archived / deleted role
+    banned: bool = False  # disabled role
 
 
 class Organization(PyrusModel):
     """An organization returned in the contacts response."""
 
-    organization_id: Optional[int] = None
-    name: Optional[str] = None
-    department_catalog_id: Optional[int] = None
+    organization_id: int | None = None
+    name: str | None = None
+    department_catalog_id: int | None = None
     persons: list[Person] = []
     roles: list[Role] = []
 
@@ -77,8 +76,8 @@ class Profile(PyrusModel):
     person_id: int
     first_name: str = ""
     last_name: str = ""
-    email: Optional[str] = None
-    locale: Optional[str] = None
-    time_zone: Optional[str] = None
-    organization_id: Optional[int] = None
-    organization: Optional[Organization] = None
+    email: str | None = None
+    locale: str | None = None
+    time_zone: str | None = None
+    organization_id: int | None = None
+    organization: Organization | None = None

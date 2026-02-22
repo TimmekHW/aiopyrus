@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import ConfigDict, Field
 
@@ -40,7 +40,7 @@ class ChannelType(str, Enum):
     avito_messenger = "avito_messenger"
     zadarma = "zadarma"
     amo_crm = "amo_crm"
-    private_channel = "private_channel"   # corp instances
+    private_channel = "private_channel"  # corp instances
 
 
 # Kept for backwards compatibility and for use in request payloads
@@ -50,8 +50,8 @@ CommentChannel = ChannelType
 class ChannelContact(PyrusModel):
     """Email address or display name of a channel participant."""
 
-    email: Optional[str] = None
-    name: Optional[str] = None
+    email: str | None = None
+    name: str | None = None
 
 
 class Channel(PyrusModel):
@@ -63,10 +63,10 @@ class Channel(PyrusModel):
 
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
 
-    type: Optional[ChannelType] = None
-    to: Optional[ChannelContact] = None
+    type: ChannelType | None = None
+    to: ChannelContact | None = None
     # ``from`` is a reserved keyword in Python — alias maps "from" → from_
-    from_: Optional[ChannelContact] = Field(None, alias="from")
+    from_: ChannelContact | None = Field(None, alias="from")
 
 
 class ApprovalEntry(PyrusModel):
@@ -77,8 +77,8 @@ class ApprovalEntry(PyrusModel):
     """
 
     person: Person
-    approval_choice: Optional[ApprovalChoice] = None
-    step: Optional[int] = None
+    approval_choice: ApprovalChoice | None = None
+    step: int | None = None
 
     @property
     def is_waiting(self) -> bool:
@@ -101,77 +101,77 @@ class SubscriberEntry(PyrusModel):
     """
 
     person: Person
-    settings: Optional[Any] = None
-    approval_choice: Optional[ApprovalChoice] = None
+    settings: Any | None = None
+    approval_choice: ApprovalChoice | None = None
 
 
 class Comment(PyrusModel):
     """A comment on a task (also represents task state changes)."""
 
     id: int
-    text: Optional[str] = None
-    formatted_text: Optional[str] = None   # HTML-formatted version
-    create_date: Optional[datetime] = None
-    author: Optional[Person] = None
+    text: str | None = None
+    formatted_text: str | None = None  # HTML-formatted version
+    create_date: datetime | None = None
+    author: Person | None = None
 
     # --- Workflow actions ---
-    action: Optional[TaskAction] = None
-    changed_step: Optional[int] = None     # new step after action (form tasks)
-    reset_to_step: Optional[int] = None    # previous step when workflow is reverted
+    action: TaskAction | None = None
+    changed_step: int | None = None  # new step after action (form tasks)
+    reset_to_step: int | None = None  # previous step when workflow is reverted
 
     # --- Editing ---
-    edit_comment_id: Optional[int] = None  # id of the original comment being edited
+    edit_comment_id: int | None = None  # id of the original comment being edited
 
     # --- Approval ---
-    approval_choice: Optional[ApprovalChoice] = None
-    approval_step: Optional[int] = None
-    approvals_added: Optional[list[list[ApprovalEntry]]] = None
-    approvals_removed: Optional[list[ApprovalEntry]] = None
-    approvals_rerequested: Optional[list[list[ApprovalEntry]]] = None
+    approval_choice: ApprovalChoice | None = None
+    approval_step: int | None = None
+    approvals_added: list[list[ApprovalEntry]] | None = None
+    approvals_removed: list[ApprovalEntry] | None = None
+    approvals_rerequested: list[list[ApprovalEntry]] | None = None
 
     # --- Reassignment ---
     # "reassigned_to" is the field name in the API response
-    reassigned_to: Optional[Person] = None
+    reassigned_to: Person | None = None
 
     # --- Participants / subscribers ---
-    participants_added: Optional[list[Person]] = None
-    participants_removed: Optional[list[Person]] = None
-    subscribers_added: Optional[list[Person]] = None
-    subscribers_removed: Optional[list[Person]] = None
-    subscribers_rerequested: Optional[list[Person]] = None
+    participants_added: list[Person] | None = None
+    participants_removed: list[Person] | None = None
+    subscribers_added: list[Person] | None = None
+    subscribers_removed: list[Person] | None = None
+    subscribers_rerequested: list[Person] | None = None
 
     # --- Form fields ---
-    field_updates: Optional[list[FormField]] = None
+    field_updates: list[FormField] | None = None
 
     # --- Lists ---
-    added_list_ids: Optional[list[int]] = None
-    removed_list_ids: Optional[list[int]] = None
+    added_list_ids: list[int] | None = None
+    removed_list_ids: list[int] | None = None
 
     # --- Attachments ---
-    attachments: Optional[list[Attachment]] = None
+    attachments: list[Attachment] | None = None
 
     # --- Time tracking ---
-    spent_minutes: Optional[int] = None
+    spent_minutes: int | None = None
 
     # --- Due date ---
     # API returns "due" (not "due_date") when a comment sets the task due date
-    due: Optional[str] = None
-    due_date: Optional[str] = None
-    cancel_due: Optional[bool] = None
+    due: str | None = None
+    due_date: str | None = None
+    cancel_due: bool | None = None
 
     # --- Scheduling ---
-    scheduled_date: Optional[str] = None
-    scheduled_datetime_utc: Optional[datetime] = None
+    scheduled_date: str | None = None
+    scheduled_datetime_utc: datetime | None = None
 
     # --- Mentions ---
-    mentions: Optional[list[int]] = None     # list of mentioned person IDs
-    reply_note_id: Optional[int] = None      # comment this replies to
+    mentions: list[int] | None = None  # list of mentioned person IDs
+    reply_note_id: int | None = None  # comment this replies to
 
     # --- External channel ---
-    channel: Optional[Channel] = None
+    channel: Channel | None = None
 
     # --- Role-based comment ---
-    comment_as_roles: Optional[list[Role]] = None
+    comment_as_roles: list[Role] | None = None
 
     # ---- Convenience properties ----
 
@@ -196,35 +196,35 @@ class Task(PyrusModel):
     """A Pyrus task — either a free task or a form task."""
 
     id: int
-    text: Optional[str] = None
-    formatted_text: Optional[str] = None
-    subject: Optional[str] = None
-    create_date: Optional[datetime] = None
-    last_modified_date: Optional[datetime] = None
-    close_date: Optional[datetime] = None
-    due_date: Optional[str] = None
-    due: Optional[datetime] = None
-    duration: Optional[int] = None           # minutes (for calendar events)
-    scheduled_date: Optional[str] = None
-    scheduled_datetime_utc: Optional[datetime] = None
+    text: str | None = None
+    formatted_text: str | None = None
+    subject: str | None = None
+    create_date: datetime | None = None
+    last_modified_date: datetime | None = None
+    close_date: datetime | None = None
+    due_date: str | None = None
+    due: datetime | None = None
+    duration: int | None = None  # minutes (for calendar events)
+    scheduled_date: str | None = None
+    scheduled_datetime_utc: datetime | None = None
 
     # --- People ---
-    author: Optional[Person] = None
-    responsible: Optional[Person] = None
+    author: Person | None = None
+    responsible: Person | None = None
     participants: list[Person] = []
     subscribers: list[SubscriberEntry] = []  # observers (corp: {person, settings})
     # approvals[step_index][approver_index]
-    approvals: Optional[list[list[ApprovalEntry]]] = None
+    approvals: list[list[ApprovalEntry]] | None = None
 
     # --- Hierarchy ---
-    parent_task_id: Optional[int] = None
+    parent_task_id: int | None = None
     linked_task_ids: list[int] = []
 
     # --- Form-specific ---
-    form_id: Optional[int] = None
+    form_id: int | None = None
     fields: list[FormField] = []
-    current_step: Optional[int] = None
-    flat: Optional[bool] = None
+    current_step: int | None = None
+    flat: bool | None = None
 
     # --- Content ---
     comments: list[Comment] = []
@@ -234,12 +234,12 @@ class Task(PyrusModel):
     list_ids: list[int] = []
 
     # --- Status ---
-    deleted: Optional[bool] = None
-    close_comment: Optional[str] = None
+    deleted: bool | None = None
+    close_comment: str | None = None
     # Corporate Pyrus instances return is_closed instead of / alongside close_date
-    is_closed: Optional[bool] = None
+    is_closed: bool | None = None
     # Workflow step definitions embedded in the task (corp instances return a list)
-    steps: Optional[list[dict]] = None
+    steps: list[dict] | None = None
 
     # ---- Convenience properties ----
 
@@ -328,7 +328,9 @@ class Task(PyrusModel):
             # Recurse into title sub-fields first (so sub-fields are also searched)
             title = field.as_title() if field.type and field.type.value == "title" else None
             if title and title.fields:
-                Task._collect_fields(title.fields, name, value_contains, field_type, only_filled, results)
+                Task._collect_fields(
+                    title.fields, name, value_contains, field_type, only_filled, results
+                )
 
             # Apply filters
             if only_filled and field.value is None:
@@ -356,6 +358,7 @@ class Task(PyrusModel):
             await ctx.answer("Принято")
         """
         from aiopyrus.utils.context import TaskContext
+
         return TaskContext(self, client)
 
     def __repr__(self) -> str:
@@ -368,29 +371,29 @@ class TaskResponse(PyrusModel):
 
 class InboxResponse(PyrusModel):
     tasks: list[Task] = []
-    has_more: Optional[bool] = None
+    has_more: bool | None = None
 
 
 class RegisterResponse(PyrusModel):
     tasks: list[Task] = []
-    has_more: Optional[bool] = None
-    total_count: Optional[int] = None
+    has_more: bool | None = None
+    total_count: int | None = None
 
 
 class AnnouncementComment(PyrusModel):
     id: int
-    text: Optional[str] = None
-    create_date: Optional[datetime] = None
-    author: Optional[Person] = None
-    attachments: Optional[list[Attachment]] = None
+    text: str | None = None
+    create_date: datetime | None = None
+    author: Person | None = None
+    attachments: list[Attachment] | None = None
 
 
 class Announcement(PyrusModel):
     id: int
-    text: Optional[str] = None
-    create_date: Optional[datetime] = None
-    last_modified_date: Optional[datetime] = None
-    author: Optional[Person] = None
+    text: str | None = None
+    create_date: datetime | None = None
+    last_modified_date: datetime | None = None
+    author: Person | None = None
     subscribers: list[Person] = []
     comments: list[AnnouncementComment] = []
     attachments: list[Attachment] = []

@@ -92,8 +92,10 @@ Full flow example / Пример полного флоу::
         ctx.set("Статус задачи", "Выполнена").set("Номер кейса", "INC-001")
         await ctx.approve("Processing complete")
 """
+
 from __future__ import annotations
 
+import contextlib
 import fnmatch
 from typing import TYPE_CHECKING, Any
 
@@ -109,7 +111,8 @@ if TYPE_CHECKING:
 # Required-field detection helper
 # ---------------------------------------------------------------------------
 
-def _collect_task_values(fields: list, out: "dict[int, Any]") -> None:
+
+def _collect_task_values(fields: list, out: dict[int, Any]) -> None:
     """Recursively collect field_id → value for all task fields (including title sub-fields)."""
     for field in fields:
         if field.value is not None:
@@ -138,13 +141,12 @@ def _collect_required_missing(
         sub_raw = info.get("fields") if isinstance(info, dict) else None
         if sub_raw:
             from aiopyrus.types.form import FormField as FF
+
             sub: list = []
             for s in sub_raw:
                 if isinstance(s, dict):
-                    try:
+                    with contextlib.suppress(Exception):
                         sub.append(FF.model_validate(s))
-                    except Exception:
-                        pass
             if sub:
                 _collect_required_missing(sub, task_values, step, result)
 
@@ -153,7 +155,8 @@ def _collect_required_missing(
 # Field value reader — returns human-readable value
 # ---------------------------------------------------------------------------
 
-def _read_field(field: "FormField") -> Any:
+
+def _read_field(field: FormField) -> Any:
     """Return the human-readable value for a field.
 
     - text / email / phone / number / money / date / … → str / int / float
@@ -216,6 +219,7 @@ def _read_field(field: "FormField") -> Any:
 # TaskContext
 # ---------------------------------------------------------------------------
 
+
 class TaskContext:
     """Aiogram-style wrapper over a Pyrus Task.
 
@@ -254,10 +258,10 @@ class TaskContext:
     Все ``set()``-ы отправляются одним вызовом при следующей отправке.
     """
 
-    def __init__(self, task: Task, client: "UserClient") -> None:
+    def __init__(self, task: Task, client: UserClient) -> None:
         self._task = task
         self._client = client
-        self._pending: list[tuple["FormField", Any]] = []
+        self._pending: list[tuple[FormField, Any]] = []
 
     # ------------------------------------------------------------------
     # Reading
@@ -285,7 +289,7 @@ class TaskContext:
         val = _read_field(field)
         return val if val is not None else default
 
-    def raw(self, field_name: str) -> "FormField | None":
+    def raw(self, field_name: str) -> FormField | None:
         """Return the raw ``FormField`` object (useful for catalog headers, choice IDs, etc.)."""
         return self._task.get_field(field_name)
 
@@ -327,7 +331,7 @@ class TaskContext:
     # Writing (lazy — applied on the next answer/approve/finish/reject)
     # ------------------------------------------------------------------
 
-    def set(self, field_name: str, value: Any) -> "TaskContext":
+    def set(self, field_name: str, value: Any) -> TaskContext:
         """Schedule a field update (lazy — sent on the next answer/approve/etc.).
 
         String values are resolved to IDs automatically:
@@ -356,7 +360,7 @@ class TaskContext:
         self._pending.append((field, value))
         return self
 
-    def discard(self) -> "TaskContext":
+    def discard(self) -> TaskContext:
         """Drop all uncommitted ``set()``-s without sending them."""
         self._pending.clear()
         return self
@@ -393,11 +397,11 @@ class TaskContext:
 
     # Aliases — use whichever name you prefer
     comment = answer  # ctx.comment("text")
-    send    = answer  # ctx.send("text")
+    send = answer  # ctx.send("text")
 
     async def reassign(
         self,
-        to: "str | int",
+        to: str | int,
         text: str | None = None,
         **kwargs: Any,
     ) -> Task:
@@ -497,9 +501,7 @@ class TaskContext:
         """
         updates = await self._flush()
         if updates:
-            self._task = await self._client.comment_task(
-                self._task.id, field_updates=updates
-            )
+            self._task = await self._client.comment_task(self._task.id, field_updates=updates)
         old_step, old_closed = self._task.current_step, self._task.closed
         result = await self._client.comment_task(
             self._task.id,
@@ -516,9 +518,7 @@ class TaskContext:
         """Reject the current approval step and flush pending ``set()``-s."""
         updates = await self._flush()
         if updates:
-            self._task = await self._client.comment_task(
-                self._task.id, field_updates=updates
-            )
+            self._task = await self._client.comment_task(self._task.id, field_updates=updates)
         result = await self._client.comment_task(
             self._task.id,
             approval_choice=ApprovalChoice.rejected,
@@ -532,9 +532,7 @@ class TaskContext:
         """Finish (close) the task and flush pending ``set()``-s."""
         updates = await self._flush()
         if updates:
-            self._task = await self._client.comment_task(
-                self._task.id, field_updates=updates
-            )
+            self._task = await self._client.comment_task(self._task.id, field_updates=updates)
         old_step, old_closed = self._task.current_step, self._task.closed
         result = await self._client.comment_task(
             self._task.id,
@@ -610,7 +608,8 @@ class TaskContext:
                     approver_ids = {e.person.id for e in step_approvers if e.person}
                     approver_names = [
                         e.person.full_name or f"id={e.person.id}"
-                        for e in step_approvers if e.person
+                        for e in step_approvers
+                        if e.person
                     ]
                     current_user_id: int | None = None
                     try:
@@ -665,7 +664,7 @@ class TaskContext:
         self._pending.clear()
         return updates
 
-    async def _resolve(self, field: "FormField", value: Any) -> dict:
+    async def _resolve(self, field: FormField, value: Any) -> dict:
         """Resolve a single (field, value) to an API payload dict."""
         if value is None:
             return FieldUpdate.clear(field.id)
