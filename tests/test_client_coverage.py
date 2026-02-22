@@ -128,9 +128,7 @@ class TestGetCalendar:
     @respx.mock
     async def test_get_calendar_no_params(self, client):
         _mock_auth()
-        respx.get(f"{API_BASE}calendar").mock(
-            return_value=httpx.Response(200, json={"tasks": []})
-        )
+        respx.get(f"{API_BASE}calendar").mock(return_value=httpx.Response(200, json={"tasks": []}))
         await client.auth()
         tasks = await client.get_calendar()
         assert tasks == []
@@ -167,7 +165,11 @@ class TestGetCatalog:
         respx.get(f"{API_BASE}catalogs/999").mock(
             return_value=httpx.Response(
                 200,
-                json={"catalog_id": 999, "name": "Cities", "items": [{"item_id": 1, "values": ["Moscow"]}]},
+                json={
+                    "catalog_id": 999,
+                    "name": "Cities",
+                    "items": [{"item_id": 1, "values": ["Moscow"]}],
+                },
             )
         )
         await client.auth()
@@ -308,7 +310,12 @@ class TestFindMembers:
                 200,
                 json={
                     "members": [
-                        {"id": 1, "first_name": "Ivan", "last_name": "Ivanov", "email": "ivan@example.com"},
+                        {
+                            "id": 1,
+                            "first_name": "Ivan",
+                            "last_name": "Ivanov",
+                            "email": "ivan@example.com",
+                        },
                     ]
                 },
             )
@@ -636,9 +643,7 @@ class TestAnnouncementsExtended:
     async def test_create_with_attachments(self, client):
         _mock_auth()
         respx.post(f"{API_BASE}announcements").mock(
-            return_value=httpx.Response(
-                200, json={"announcement": {"id": 1, "text": "News"}}
-            )
+            return_value=httpx.Response(200, json={"announcement": {"id": 1, "text": "News"}})
         )
         await client.auth()
         await client.create_announcement(text="News", attachments=["guid1"])
@@ -650,9 +655,7 @@ class TestAnnouncementsExtended:
     async def test_comment_with_attachments(self, client):
         _mock_auth()
         respx.post(f"{API_BASE}announcements/1/comments").mock(
-            return_value=httpx.Response(
-                200, json={"announcement": {"id": 1, "text": "News"}}
-            )
+            return_value=httpx.Response(200, json={"announcement": {"id": 1, "text": "News"}})
         )
         await client.auth()
         await client.comment_announcement(1, text="Reply", attachments=["guid2"])

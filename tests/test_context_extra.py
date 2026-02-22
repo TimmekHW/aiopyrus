@@ -236,7 +236,9 @@ class TestContextResolve:
     async def test_resolve_multiple_choice_by_string(self):
         """String value for multiple_choice triggers form API lookup."""
         field = make_field(
-            id=10, name="Status", type="multiple_choice",
+            id=10,
+            name="Status",
+            type="multiple_choice",
             value={"choice_ids": [1], "choice_names": ["Open"]},
         )
         returned_task = make_task(id=42, form_id=321, fields=[field])
@@ -255,7 +257,9 @@ class TestContextResolve:
     async def test_resolve_multiple_choice_str_not_found(self):
         """Unknown choice name → ValueError."""
         field = make_field(
-            id=10, name="Status", type="multiple_choice",
+            id=10,
+            name="Status",
+            type="multiple_choice",
             value={"choice_ids": [1]},
         )
         client = AsyncMock()
@@ -269,7 +273,9 @@ class TestContextResolve:
     async def test_resolve_multiple_choice_no_form_id(self):
         """String choice on a free task (no form_id) → ValueError."""
         field = make_field(
-            id=10, name="Status", type="multiple_choice",
+            id=10,
+            name="Status",
+            type="multiple_choice",
             value={"choice_ids": [1]},
         )
         client = AsyncMock()
@@ -365,7 +371,9 @@ class TestRaiseIfBlocked:
         form = MagicMock()
         form.fields = [
             FormField(
-                id=10, name="Required Field", type=FieldType.text,
+                id=10,
+                name="Required Field",
+                type=FieldType.text,
                 info={"required_step": 1},
             )
         ]

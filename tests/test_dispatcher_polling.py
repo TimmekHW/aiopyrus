@@ -189,8 +189,11 @@ class TestStartPolling:
 
         with patch("asyncio.sleep", side_effect=fake_sleep):
             await dp.start_polling(
-                bot, form_id=321, interval=0.01,
-                on_startup=on_startup, on_shutdown=on_shutdown,
+                bot,
+                form_id=321,
+                interval=0.01,
+                on_startup=on_startup,
+                on_shutdown=on_shutdown,
             )
 
         assert startup_called
@@ -259,7 +262,10 @@ class TestStartWebhook:
             await dp.start_webhook(bot, host="127.0.0.1", port=9090, path="/pyrus")
 
             mock_create.assert_called_once_with(
-                dispatcher=dp, bot=bot, path="/pyrus", verify_signature=True,
+                dispatcher=dp,
+                bot=bot,
+                path="/pyrus",
+                verify_signature=True,
             )
             mock_run.assert_called_once_with(mock_app, host="127.0.0.1", port=9090)
 
