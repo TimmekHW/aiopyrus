@@ -33,4 +33,4 @@ jobs:
           python-version: ${{ matrix.python-version }}
           allow-prereleases: true
       - run: pip install -e .[dev]
-      - run: pytest -v --tb=short
+      - run: pytest -v --tb=short || [ $? -eq 5 ]
