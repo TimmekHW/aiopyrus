@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from aiopyrus.types.form import FieldType, FormField
@@ -10,9 +12,9 @@ from aiopyrus.types.user import Person
 from aiopyrus.types.webhook import WebhookPayload
 
 
-def make_task(**overrides) -> Task:
+def make_task(**overrides: Any) -> Task:
     """Build a Task with sensible defaults, overridable by kwargs."""
-    defaults = dict(
+    defaults: dict[str, Any] = dict(
         id=12345678,
         text="Test task",
         form_id=321,
@@ -23,7 +25,7 @@ def make_task(**overrides) -> Task:
     return Task(**defaults)
 
 
-def make_payload(**task_overrides) -> WebhookPayload:
+def make_payload(**task_overrides: Any) -> WebhookPayload:
     """Build a WebhookPayload wrapping a default task."""
     task = make_task(**task_overrides)
     return WebhookPayload(
@@ -38,8 +40,8 @@ def make_field(
     id: int = 1,
     name: str = "Field",
     type: str = "text",
-    value=None,
-    **extra,
+    value: Any = None,
+    **extra: Any,
 ) -> FormField:
     """Build a FormField with given params."""
     return FormField(id=id, name=name, type=FieldType(type), value=value, **extra)
