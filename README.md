@@ -3,7 +3,7 @@
 [![PyPI](https://img.shields.io/pypi/v/aiopyrus)](https://pypi.org/project/aiopyrus/)
 [![Python](https://img.shields.io/pypi/pyversions/aiopyrus)](https://pypi.org/project/aiopyrus/)
 [![CI](https://github.com/TimmekHW/aiopyrus/actions/workflows/ci.yml/badge.svg)](https://github.com/TimmekHW/aiopyrus/actions/workflows/ci.yml)
-[![Downloads](https://img.shields.io/pypi/dm/aiopyrus)](https://pypi.org/project/aiopyrus/)
+[![Downloads](https://static.pepy.tech/badge/aiopyrus/month)](https://pepy.tech/projects/aiopyrus)
 [![License](https://img.shields.io/github/license/TimmekHW/aiopyrus)](LICENSE)
 
 Асинхронная Python-библиотека для [Pyrus API](https://pyrus.com/ru/help/api).
