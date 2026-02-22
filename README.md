@@ -1,5 +1,11 @@
 # aiopyrus
 
+[![PyPI](https://img.shields.io/pypi/v/aiopyrus)](https://pypi.org/project/aiopyrus/)
+[![Python](https://img.shields.io/pypi/pyversions/aiopyrus)](https://pypi.org/project/aiopyrus/)
+[![CI](https://github.com/TimmekHW/aiopyrus/actions/workflows/ci.yml/badge.svg)](https://github.com/TimmekHW/aiopyrus/actions/workflows/ci.yml)
+[![Downloads](https://img.shields.io/pypi/dm/aiopyrus)](https://pypi.org/project/aiopyrus/)
+[![License](https://img.shields.io/github/license/TimmekHW/aiopyrus)](LICENSE)
+
 Асинхронная Python-библиотека для [Pyrus API](https://pyrus.com/ru/help/api).
 Стиль — как у aiogram. Под капотом — HTTPX.
 
@@ -245,6 +251,24 @@ client = UserClient(
 | [`03_bot_webhook.py`](examples/03_bot_webhook.py) | Бот на вебхуках, роутеры, фильтры, middleware |
 | [`04_bot_polling.py`](examples/04_bot_polling.py) | Polling-режим, skip_old, lifecycle hooks |
 | [`05_data_management.py`](examples/05_data_management.py) | Реестры, каталоги, участники, роли, файлы |
+
+## FAQ
+
+### Чем aiopyrus отличается от официального pyrus-api?
+
+[pyrus-api](https://pypi.org/project/pyrus-api/) — синхронная обёртка от Pyrus на `requests`. aiopyrus — полностью асинхронный фреймворк на `httpx` с системой роутеров, фильтров и middleware как в aiogram. Работа с полями задач идёт по именам из интерфейса, а не по `field_id`.
+
+### Нужен ли публичный сервер для бота?
+
+Нет. Есть polling-режим (`dp.start_polling(...)`) — бот сам опрашивает Pyrus по таймеру. Работает за файрволом, NAT, VPN.
+
+### Поддерживаются ли on-premise инсталляции Pyrus?
+
+Да. Передайте `base_url="https://pyrus.mycompany.ru"` при создании клиента.
+
+### Можно ли использовать без бота, просто как API-клиент?
+
+Да, именно для этого есть `UserClient` — скрипты от имени вашего аккаунта без регистрации бота.
 
 ## Лицензия
 

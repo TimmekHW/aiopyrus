@@ -5,11 +5,35 @@ build-backend = "hatchling.build"
 [project]
 name = "aiopyrus"
 version = "0.1.1"
-description = "Async Python library for Pyrus API — Aiogram-style, HTTPX-powered"
+description = "Async Python framework for Pyrus API — bots, webhooks, polling, aiogram-style"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
-keywords = ["pyrus", "api", "async", "bot", "httpx"]
+keywords = [
+    "pyrus", "pyrus-api", "async", "bot", "webhook",
+    "polling", "httpx", "aiogram", "bpm", "workflow",
+    "automation", "task-management",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Framework :: AsyncIO",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+    "Typing :: Typed",
+]
+
+[project.urls]
+Homepage = "https://github.com/TimmekHW/aiopyrus"
+Documentation = "https://github.com/TimmekHW/aiopyrus#readme"
+Changelog = "https://github.com/TimmekHW/aiopyrus/releases"
+Issues = "https://github.com/TimmekHW/aiopyrus/issues"
 dependencies = [
     "httpx>=0.27.0",
     "pydantic>=2.0.0",
