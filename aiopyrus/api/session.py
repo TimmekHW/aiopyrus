@@ -157,10 +157,12 @@ class PyrusSession:
             if "api_url" in data:
                 self._api_url = data["api_url"]
             elif "api_url" not in data:
-                # Corp instance: derive api_url from auth_url (strip /auth suffix)
+                # Corp instance: derive api_url from auth_url
+                # auth_url = "https://pyrus.corp.ru/api/v4/auth" → api_url = "https://pyrus.corp.ru/v4/"
                 base = self._auth_url
                 if base.endswith("/auth"):
-                    self._api_url = base[: -len("auth")]  # keep trailing slash
+                    # Strip "/auth" then replace "/api" with empty string
+                    self._api_url = base[:-5].replace("/api", "", 1)
         if "files_url" in data:
             self._files_url = data["files_url"]
 
