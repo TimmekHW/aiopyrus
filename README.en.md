@@ -226,7 +226,7 @@ Built-in rate limiter with exponential backoff. Pyrus API limits: 5000 requests 
 client = UserClient(
     login="user@corp.com",
     security_key="KEY",
-    base_url="https://pyrus.mycompany.com",
+    api_url="https://pyrus.mycompany.com",
 )
 ```
 
@@ -264,7 +264,7 @@ No. There is a polling mode (`dp.start_polling(...)`) — the bot polls Pyrus on
 
 ### Are on-premise Pyrus installations supported?
 
-Yes. Pass `base_url="https://pyrus.mycompany.com"` when creating the client.
+Yes. Pass `api_url="https://pyrus.mycompany.com"` when creating the client.
 
 ### Can I use it without a bot, just as an API client?
 

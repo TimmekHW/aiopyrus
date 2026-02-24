@@ -44,4 +44,4 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - `BaseMiddleware` support
 - Rate limiter (per-minute / per-10-min)
 - Full type annotations, `py.typed` marker
-- On-premise / corp instance support via `base_url`
+- On-premise / corp instance support via `api_url`
