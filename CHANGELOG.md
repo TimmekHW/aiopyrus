@@ -5,14 +5,25 @@ All notable changes to **aiopyrus** will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
+## [0.1.4] — 2026-02-24
+
+### Added
+- `base_url` param for on-premise: single URL instead of separate `api_url` + `auth_url`
+  (accepts `"https://pyrus.mycompany.com"` or `"https://pyrus.mycompany.com/api/v4"`)
+- `api_version` param (default `"v4"`)
+- `ssl_verify` flag (default `True`) for self-signed certificates
+- `.coverage` / `htmlcov/` added to `.gitignore`
+
+### Changed
+- On-premise setup simplified: `base_url` auto-derives both `api_url` and `auth_url`
+- Old `api_url` / `auth_url` params kept for backwards compatibility
+
 ## [0.1.3] — 2026-02-24
 
 ### Fixed
 - `FormField.duration` type: Pyrus returns `int` (e.g., `60` for 60 minutes),
   but library expected `str`. Now accepts `int | str | None`.
-- Documentation: on-premise examples now show correct `api_url` and `auth_url`
-  format (e.g., `api_url="https://pyrus.mycompany.ru/v4"`,
-  `auth_url="https://pyrus.mycompany.ru/api/v4/auth"`)
+- Correct trailing slash in derived `api_url` for corp instances
 
 ### Changed
 - Version bump to 0.1.3

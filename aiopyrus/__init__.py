@@ -158,7 +158,7 @@ from .types import (
 from .user.client import UserClient
 from .utils.context import TaskContext
 
-__version__ = "0.1.3"
+__version__ = "0.1.4"
 _CODENAME = "Перезрелая груша с кривым API"  # 🍐
 __all__ = [
     # Clients & context
