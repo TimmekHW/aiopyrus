@@ -53,14 +53,16 @@ def _derive_urls(base_url: str, api_version: str) -> tuple[str, str]:
 
         "https://pyrus.mycompany.com"
         "https://pyrus.mycompany.com/api/v4"
-        "https://pyrus.mycompany.com/v4"
+
+    On-premise Pyrus uses ``/api/v4/`` for both auth and API calls
+    (unlike cloud where API is on a separate subdomain ``api.pyrus.com/v4/``).
 
     Returns ``(api_url, auth_url)`` with correct trailing slashes.
     """
     base = base_url.rstrip("/")
     # Strip existing version suffix so we can rebuild with api_version
     host_base = re.sub(r"(/api)?/v\d+$", "", base)
-    api_url = f"{host_base}/{api_version}/"
+    api_url = f"{host_base}/api/{api_version}/"
     auth_url = f"{host_base}/api/{api_version}/auth"
     return api_url, auth_url
 

@@ -143,11 +143,11 @@ class TestSessionAuth:
             return_value=httpx.Response(200, json={"access_token": "tok"})
         )
         s = _session(base_url="https://pyrus.corp.ru")
-        assert s._api_url == "https://pyrus.corp.ru/v4/"
+        assert s._api_url == "https://pyrus.corp.ru/api/v4/"
         assert s._auth_url == "https://pyrus.corp.ru/api/v4/auth"
         await s.auth()
         # api_url should NOT be overridden since base_url marks it explicit
-        assert s._api_url == "https://pyrus.corp.ru/v4/"
+        assert s._api_url == "https://pyrus.corp.ru/api/v4/"
         await s.close()
 
     def test_set_token(self):
@@ -441,32 +441,32 @@ class TestURLConstruction:
 class TestDeriveUrls:
     def test_short_base_url(self):
         api, auth = _derive_urls("https://pyrus.mycompany.com", "v4")
-        assert api == "https://pyrus.mycompany.com/v4/"
+        assert api == "https://pyrus.mycompany.com/api/v4/"
         assert auth == "https://pyrus.mycompany.com/api/v4/auth"
 
     def test_full_api_url(self):
         api, auth = _derive_urls("https://pyrus.mycompany.com/api/v4", "v4")
-        assert api == "https://pyrus.mycompany.com/v4/"
+        assert api == "https://pyrus.mycompany.com/api/v4/"
         assert auth == "https://pyrus.mycompany.com/api/v4/auth"
 
     def test_short_versioned_url(self):
         api, auth = _derive_urls("https://pyrus.mycompany.com/v4", "v4")
-        assert api == "https://pyrus.mycompany.com/v4/"
+        assert api == "https://pyrus.mycompany.com/api/v4/"
         assert auth == "https://pyrus.mycompany.com/api/v4/auth"
 
     def test_trailing_slash_stripped(self):
         api, auth = _derive_urls("https://pyrus.mycompany.com/", "v4")
-        assert api == "https://pyrus.mycompany.com/v4/"
+        assert api == "https://pyrus.mycompany.com/api/v4/"
         assert auth == "https://pyrus.mycompany.com/api/v4/auth"
 
     def test_custom_api_version(self):
         api, auth = _derive_urls("https://pyrus.mycompany.com", "v5")
-        assert api == "https://pyrus.mycompany.com/v5/"
+        assert api == "https://pyrus.mycompany.com/api/v5/"
         assert auth == "https://pyrus.mycompany.com/api/v5/auth"
 
     def test_version_in_url_replaced_by_param(self):
         api, auth = _derive_urls("https://pyrus.mycompany.com/api/v4", "v5")
-        assert api == "https://pyrus.mycompany.com/v5/"
+        assert api == "https://pyrus.mycompany.com/api/v5/"
         assert auth == "https://pyrus.mycompany.com/api/v5/auth"
 
 
