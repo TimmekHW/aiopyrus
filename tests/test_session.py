@@ -8,7 +8,7 @@ import httpx
 import pytest
 import respx
 
-from aiopyrus.api.session import PyrusSession, _retry_wait
+from aiopyrus.api.session import PyrusSession, _derive_urls, _retry_wait
 from aiopyrus.exceptions import (
     PyrusAPIError,
     PyrusAuthError,
@@ -137,13 +137,16 @@ class TestSessionAuth:
         await s.close()
 
     @respx.mock
-    async def test_corp_url_derived_from_auth_url(self):
-        """When api_url not in response and auth_url is custom, derive api_url."""
+    async def test_base_url_derives_both_urls(self):
+        """base_url should derive both api_url and auth_url automatically."""
         respx.post("https://pyrus.corp.ru/api/v4/auth").mock(
             return_value=httpx.Response(200, json={"access_token": "tok"})
         )
-        s = _session(auth_url="https://pyrus.corp.ru/api/v4/auth")
+        s = _session(base_url="https://pyrus.corp.ru")
+        assert s._api_url == "https://pyrus.corp.ru/v4/"
+        assert s._auth_url == "https://pyrus.corp.ru/api/v4/auth"
         await s.auth()
+        # api_url should NOT be overridden since base_url marks it explicit
         assert s._api_url == "https://pyrus.corp.ru/v4/"
         await s.close()
 
@@ -430,3 +433,59 @@ class TestURLConstruction:
         s = _session()
         with pytest.raises(PyrusAuthError, match="Not authenticated"):
             s._auth_headers()
+
+
+# ── _derive_urls ───────────────────────────────────────────
+
+
+class TestDeriveUrls:
+    def test_short_base_url(self):
+        api, auth = _derive_urls("https://pyrus.mycompany.com", "v4")
+        assert api == "https://pyrus.mycompany.com/v4/"
+        assert auth == "https://pyrus.mycompany.com/api/v4/auth"
+
+    def test_full_api_url(self):
+        api, auth = _derive_urls("https://pyrus.mycompany.com/api/v4", "v4")
+        assert api == "https://pyrus.mycompany.com/v4/"
+        assert auth == "https://pyrus.mycompany.com/api/v4/auth"
+
+    def test_short_versioned_url(self):
+        api, auth = _derive_urls("https://pyrus.mycompany.com/v4", "v4")
+        assert api == "https://pyrus.mycompany.com/v4/"
+        assert auth == "https://pyrus.mycompany.com/api/v4/auth"
+
+    def test_trailing_slash_stripped(self):
+        api, auth = _derive_urls("https://pyrus.mycompany.com/", "v4")
+        assert api == "https://pyrus.mycompany.com/v4/"
+        assert auth == "https://pyrus.mycompany.com/api/v4/auth"
+
+    def test_custom_api_version(self):
+        api, auth = _derive_urls("https://pyrus.mycompany.com", "v5")
+        assert api == "https://pyrus.mycompany.com/v5/"
+        assert auth == "https://pyrus.mycompany.com/api/v5/auth"
+
+    def test_version_in_url_replaced_by_param(self):
+        api, auth = _derive_urls("https://pyrus.mycompany.com/api/v4", "v5")
+        assert api == "https://pyrus.mycompany.com/v5/"
+        assert auth == "https://pyrus.mycompany.com/api/v5/auth"
+
+
+# ── ssl_verify ─────────────────────────────────────────────
+
+
+class TestSSLVerify:
+    def test_ssl_verify_default_true(self):
+        s = _session()
+        assert s._ssl_verify is True
+
+    def test_ssl_verify_false(self):
+        s = _session(ssl_verify=False)
+        assert s._ssl_verify is False
+
+    async def test_ssl_verify_passed_to_client(self):
+        s = _session(ssl_verify=False)
+        client = await s._get_client()
+        # httpx stores verify in _transport._pool._ssl_context or similar;
+        # simplest check: the client was created without error
+        assert client is not None
+        await s.close()

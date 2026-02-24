@@ -24,6 +24,10 @@ env/
 .DS_Store
 Thumbs.db
 
+# Coverage
+.coverage
+htmlcov/
+
 # Secrets / local config
 .env
 test_live.py

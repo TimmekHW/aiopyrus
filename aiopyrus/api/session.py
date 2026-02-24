@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import time
 from typing import Any
 
@@ -45,19 +46,37 @@ def _retry_wait(response: httpx.Response, default: float) -> float:
     return default
 
 
+def _derive_urls(base_url: str, api_version: str) -> tuple[str, str]:
+    """Derive ``(api_url, auth_url)`` from a single *base_url*.
+
+    Accepts both short and full forms::
+
+        "https://pyrus.mycompany.com"
+        "https://pyrus.mycompany.com/api/v4"
+        "https://pyrus.mycompany.com/v4"
+
+    Returns ``(api_url, auth_url)`` with correct trailing slashes.
+    """
+    base = base_url.rstrip("/")
+    # Strip existing version suffix so we can rebuild with api_version
+    host_base = re.sub(r"(/api)?/v\d+$", "", base)
+    api_url = f"{host_base}/{api_version}/"
+    auth_url = f"{host_base}/api/{api_version}/auth"
+    return api_url, auth_url
+
+
 class PyrusSession:
     """Low-level async HTTPX session for Pyrus API.
 
     Handles authentication, token refresh, and raw HTTP calls.
 
-    For corporate / self-hosted Pyrus instances supply ``api_url`` and
-    ``auth_url`` explicitly, e.g.::
+    For corporate / self-hosted Pyrus instances supply ``base_url``::
 
         session = PyrusSession(
             login="user@example.com",
             security_key="KEY",
-            auth_url="https://pyrus.example.com/api/v4/auth",
-            api_url="https://pyrus.example.com/v4/",
+            base_url="https://pyrus.mycompany.com",
+            ssl_verify=False,
         )
     """
 
@@ -68,10 +87,13 @@ class PyrusSession:
         person_id: int | None = None,
         *,
         timeout: float = 30.0,
+        base_url: str | None = None,
+        api_version: str = "v4",
         auth_url: str | None = None,
         api_url: str | None = None,
         files_url: str | None = None,
         proxy: str | None = None,
+        ssl_verify: bool = True,
         requests_per_second: int | None = None,
         requests_per_minute: int | None = None,
         requests_per_10min: int = 5000,
@@ -81,20 +103,26 @@ class PyrusSession:
         self._person_id = person_id
         self._timeout = timeout
         self._proxy = proxy
+        self._ssl_verify = ssl_verify
         self._rate_limiter = RateLimiter(
             requests_per_second=requests_per_second,
             requests_per_minute=requests_per_minute,
             requests_per_10min=requests_per_10min,
         )
 
-        # Custom URLs override defaults; api_url is also updated from auth response
-        self._auth_url: str = auth_url or _DEFAULT_AUTH_URL
-        self._access_token: str | None = None
-        self._api_url: str = api_url or _DEFAULT_API_URL
-        self._files_url: str = files_url or _DEFAULT_FILES_URL
-        # Track whether api_url was explicitly set (don't override with auth response then)
-        self._api_url_explicit: bool = api_url is not None
+        # URL resolution priority: base_url > explicit api_url/auth_url > defaults
+        if base_url is not None:
+            derived_api, derived_auth = _derive_urls(base_url, api_version)
+            self._api_url: str = api_url or derived_api
+            self._auth_url: str = auth_url or derived_auth
+            self._api_url_explicit = True
+        else:
+            self._auth_url = auth_url or _DEFAULT_AUTH_URL
+            self._api_url = api_url or _DEFAULT_API_URL
+            self._api_url_explicit = api_url is not None
 
+        self._access_token: str | None = None
+        self._files_url: str = files_url or _DEFAULT_FILES_URL
         self._client: httpx.AsyncClient | None = None
 
     # ------------------------------------------------------------------
@@ -105,6 +133,7 @@ class PyrusSession:
         kwargs: dict[str, Any] = {
             "timeout": self._timeout,
             "follow_redirects": True,
+            "verify": self._ssl_verify,
         }
         if self._proxy:
             kwargs["proxy"] = self._proxy
@@ -151,18 +180,9 @@ class PyrusSession:
         token: str = data["access_token"]
         self._access_token = token
 
-        # Only update api_url / files_url from the response if not explicitly set
-        # and if the server returns them (standard cloud Pyrus does; corp instances may not).
-        if not self._api_url_explicit:
-            if "api_url" in data:
-                self._api_url = data["api_url"]
-            elif "api_url" not in data:
-                # Corp instance: derive api_url from auth_url
-                # auth_url = "https://pyrus.corp.ru/api/v4/auth" → api_url = "https://pyrus.corp.ru/v4/"
-                base = self._auth_url
-                if base.endswith("/auth"):
-                    # Strip "/auth" then replace "/api" with empty string, ensure trailing slash
-                    self._api_url = base[:-5].replace("/api", "", 1).rstrip("/") + "/"
+        # Update api_url / files_url from auth response (cloud Pyrus returns these)
+        if not self._api_url_explicit and "api_url" in data:
+            self._api_url = data["api_url"]
         if "files_url" in data:
             self._files_url = data["files_url"]
 

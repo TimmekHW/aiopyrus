@@ -226,8 +226,8 @@ bot = PyrusBot(
 client = UserClient(
     login="user@corp.ru",
     security_key="KEY",
-    api_url="https://pyrus.mycompany.ru/v4",
-    auth_url="https://pyrus.mycompany.ru/api/v4/auth",
+    base_url="https://pyrus.mycompany.ru",
+    ssl_verify=False,  # самоподписанные сертификаты
 )
 ```
 
@@ -265,14 +265,14 @@ client = UserClient(
 
 ### Поддерживаются ли on-premise инсталляции Pyrus?
 
-Да. Передайте `api_url` и `auth_url` при создании клиента:
+Да. Передайте `base_url` при создании клиента:
 
 ```python
 client = UserClient(
     login="user@corp.ru",
     security_key="KEY",
-    api_url="https://pyrus.mycompany.ru/v4",
-    auth_url="https://pyrus.mycompany.ru/api/v4/auth",
+    base_url="https://pyrus.mycompany.ru",
+    ssl_verify=False,  # для самоподписанных сертификатов
 )
 ```
 
