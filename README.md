@@ -226,7 +226,8 @@ bot = PyrusBot(
 client = UserClient(
     login="user@corp.ru",
     security_key="KEY",
-    api_url="https://pyrus.mycompany.ru",
+    api_url="https://pyrus.mycompany.ru/v4",
+    auth_url="https://pyrus.mycompany.ru/api/v4/auth",
 )
 ```
 
@@ -264,7 +265,16 @@ client = UserClient(
 
 ### Поддерживаются ли on-premise инсталляции Pyrus?
 
-Да. Передайте `api_url="https://pyrus.mycompany.ru"` при создании клиента.
+Да. Передайте `api_url` и `auth_url` при создании клиента:
+
+```python
+client = UserClient(
+    login="user@corp.ru",
+    security_key="KEY",
+    api_url="https://pyrus.mycompany.ru/v4",
+    auth_url="https://pyrus.mycompany.ru/api/v4/auth",
+)
+```
 
 ### Можно ли использовать без бота, просто как API-клиент?
 
