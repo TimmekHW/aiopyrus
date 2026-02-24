@@ -5,6 +5,18 @@ All notable changes to **aiopyrus** will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
+## [0.1.3] — 2026-02-24
+
+### Fixed
+- `FormField.duration` type: Pyrus returns `int` (e.g., `60` for 60 minutes),
+  but library expected `str`. Now accepts `int | str | None`.
+- Documentation: on-premise examples now show correct `api_url` and `auth_url`
+  format (e.g., `api_url="https://pyrus.mycompany.ru/v4"`,
+  `auth_url="https://pyrus.mycompany.ru/api/v4/auth"`)
+
+### Changed
+- Version bump to 0.1.3
+
 
 ## [0.1.2] — 2026-02-23
 

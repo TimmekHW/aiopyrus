@@ -57,7 +57,7 @@ class PyrusSession:
             login="user@example.com",
             security_key="KEY",
             auth_url="https://pyrus.example.com/api/v4/auth",
-            api_url="https://pyrus.example.com/api/v4/",
+            api_url="https://pyrus.example.com/v4/",
         )
     """
 

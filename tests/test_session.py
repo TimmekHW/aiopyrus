@@ -144,7 +144,7 @@ class TestSessionAuth:
         )
         s = _session(auth_url="https://pyrus.corp.ru/api/v4/auth")
         await s.auth()
-        assert s._api_url == "https://pyrus.corp.ru/api/v4/"
+        assert s._api_url == "https://pyrus.corp.ru/v4/"
         await s.close()
 
     def test_set_token(self):
