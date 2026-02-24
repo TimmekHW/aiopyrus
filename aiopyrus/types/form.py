@@ -121,7 +121,7 @@ class FormField(PyrusModel):
     value: Any | None = None
 
     # Present on due_date / due_date_time fields
-    duration: str | None = None
+    duration: int | str | None = None
 
     # Present on cells inside a table row
     parent_id: int | None = None
