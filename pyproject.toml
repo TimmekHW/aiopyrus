@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "aiopyrus"
-version = "0.1.4"
+version = "0.1.5"
 description = "Async Python framework for Pyrus API — bots, webhooks, polling, aiogram-style"
 readme = "README.md"
 requires-python = ">=3.10"

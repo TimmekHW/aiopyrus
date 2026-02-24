@@ -5,6 +5,12 @@ All notable changes to **aiopyrus** will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
+## [0.1.5] — 2026-02-24
+
+### Fixed
+- On-premise `api_url` now correctly uses `/api/v4/` path
+  (was `/v4/` which returns 404 on corp instances)
+
 ## [0.1.4] — 2026-02-24
 
 ### Added
