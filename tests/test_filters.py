@@ -39,6 +39,12 @@ class TestFormFilter:
         p = make_payload(form_id=999)
         assert await FormFilter([321, 322])(p) is False
 
+    async def test_none_form_id_never_matches(self):
+        """form_id=None (inbox/register data) → always False."""
+        p = make_payload(form_id=None)
+        assert await FormFilter(321)(p) is False
+        assert await FormFilter([321, 322])(p) is False
+
 
 # ── StepFilter ────────────────────────────────────────────────
 
@@ -55,6 +61,12 @@ class TestStepFilter:
     async def test_match_list(self):
         p = make_payload(current_step=3)
         assert await StepFilter([2, 3])(p) is True
+
+    async def test_none_step_never_matches(self):
+        """current_step=None (inbox data) → always False."""
+        p = make_payload(current_step=None)
+        assert await StepFilter(2)(p) is False
+        assert await StepFilter([2, 3])(p) is False
 
 
 # ── ResponsibleFilter ────────────────────────────────────────

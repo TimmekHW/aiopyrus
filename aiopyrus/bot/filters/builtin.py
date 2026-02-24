@@ -14,6 +14,13 @@ if TYPE_CHECKING:
 class FormFilter(Filter):
     """Match tasks belonging to specific form(s).
 
+    Фильтр по форме задачи.
+
+    **Note:** ``form_id`` is ``None`` in responses from ``GET /inbox`` and
+    ``GET /forms/{id}/register``.  In polling mode, ``start_polling()``
+    automatically backfills ``form_id``, so this filter works correctly.
+    For inbox polling, set ``enrich=True`` or this filter will never match.
+
     Usage::
 
         @router.task_received(FormFilter(321))
@@ -34,6 +41,12 @@ class FormFilter(Filter):
 
 class StepFilter(Filter):
     """Match tasks currently at a specific workflow step.
+
+    Фильтр по текущему шагу (этапу) задачи.
+
+    **Note:** ``current_step`` is ``None`` in responses from ``GET /inbox``.
+    In polling mode this works because ``GET /register`` does return the step.
+    For inbox polling, set ``enrich=True`` or this filter will never match.
 
     Usage::
 

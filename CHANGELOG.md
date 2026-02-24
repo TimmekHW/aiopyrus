@@ -5,6 +5,24 @@ All notable changes to **aiopyrus** will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
+## [0.1.6] — 2026-02-24
+
+### Fixed
+- **Polling: `FormFilter` never matched** — `GET /register` omits `form_id` from
+  the response; `start_polling()` now backfills it from the query parameter.
+- `FieldType` enum: added missing `person_responsible`, `task_approval_date`,
+  `task_approval_user` variants.
+- `PrintTemplate.print_form_id` now optional (API sometimes omits it).
+
+### Added
+- Docstrings now document Pyrus API data availability per endpoint
+  (inbox vs register vs get_task) — on `Task` model, `get_inbox()`,
+  `get_register()`, `FormFilter`, `StepFilter`, `start_inbox_polling()`.
+- `due_filter` values documented: `"overdue"`, `"overdue_on_step"`, `"past_due"`.
+- New example `08_inbox_vs_register.py` — inbox vs register comparison,
+  multi-form polling.
+- README: new section "Inbox vs Register vs get_task".
+
 ## [0.1.5] — 2026-02-24
 
 ### Fixed

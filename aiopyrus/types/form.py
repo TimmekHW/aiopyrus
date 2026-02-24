@@ -33,6 +33,9 @@ class FieldType(str, Enum):
     form_link = "form_link"
     step = "step"
     project = "project"  # deprecated, read-only
+    person_responsible = "person_responsible"
+    task_approval_date = "task_approval_date"
+    task_approval_user = "task_approval_user"
 
 
 # ---------------------------------------------------------------------------
@@ -219,7 +222,7 @@ class FormStep(PyrusModel):
 class PrintTemplate(PyrusModel):
     """A print form (print template) attached to a form."""
 
-    print_form_id: int
+    print_form_id: int | None = None
     print_form_name: str
 
 

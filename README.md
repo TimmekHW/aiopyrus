@@ -177,6 +177,28 @@ class LoggingMiddleware(BaseMiddleware):
 dp.middleware(LoggingMiddleware())
 ```
 
+## Inbox vs Register vs get_task — что возвращает API
+
+Разные эндпоинты Pyrus возвращают **разный объём данных** в задаче:
+
+| Поле | `GET /inbox` | `GET /register` | `GET /tasks/{id}` |
+|---|:---:|:---:|:---:|
+| `id`, `text`, `author`, даты | + | + | + |
+| `current_step` | - | + | + |
+| `fields` | - | + | + |
+| `form_id` | - | - | + |
+| `approvals` | - | - | + |
+| `comments` | - | - | + |
+
+**Что это значит для фильтрации:**
+
+- `FormFilter` и `StepFilter` **не сработают** на данных из inbox (всё `None`).
+- `start_polling(form_id=...)` автоматически подставляет `form_id` — фильтры работают.
+- Для inbox-поллинга нужен `enrich=True` (дополнительный `get_task()` на каждую задачу).
+
+**Рекомендация:** если знаете формы — используйте `start_polling(form_id=[id1, id2])`.
+Inbox-поллинг подходит только для сценария «все входящие без фильтрации».
+
 ## Данные организации
 
 ```python
@@ -243,7 +265,7 @@ client = UserClient(
 
 ## Примеры
 
-В папке [`examples/`](examples/) — 7 файлов от простого к сложному:
+В папке [`examples/`](examples/) — 8 файлов от простого к сложному:
 
 | Файл | Тема |
 |---|---|
@@ -254,6 +276,7 @@ client = UserClient(
 | [`05_data_management.py`](examples/05_data_management.py) | Реестры, каталоги, участники, роли, файлы |
 | [`06_approval_bot.py`](examples/06_approval_bot.py) | Бот-наблюдатель за согласованиями, `enrich`, inbox polling |
 | [`07_middleware_errors.py`](examples/07_middleware_errors.py) | Middleware, обработка ошибок, вложенные роутеры |
+| [`08_inbox_vs_register.py`](examples/08_inbox_vs_register.py) | Inbox vs Register: что выбрать, мульти-форм polling |
 
 ## FAQ
 

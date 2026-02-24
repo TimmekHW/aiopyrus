@@ -32,9 +32,9 @@ LOGIN = "bot@example.com"
 SECURITY_KEY = "YOUR_SECURITY_KEY"
 BASE_URL = "https://pyrus.mycompany.com"  # on-premise
 
-FORM_ID = 361879  # ID формы / Form ID
-ROLE_ID = 62239  # ID роли на согласовании / Approval role ID
-FIELD_FIO = "Заявка по сотруднику (ФИО)"
+FORM_ID = 321  # ID формы / Form ID
+ROLE_ID = 5555  # ID роли на согласовании / Approval role ID
+FIELD_FIO = "ФИО сотрудника"
 
 # ── Бот и диспетчер / Bot & dispatcher ────────────────────────────────────────
 
@@ -97,9 +97,16 @@ if __name__ == "__main__":
     )
 
     # Вариант 2: Polling входящих (все формы)
+    # NB: inbox API НЕ возвращает form_id, current_step, fields, approvals.
+    #     enrich=True ОБЯЗАТЕЛЕН — иначе фильтры не сработают.
+    #     Но это +1 запрос get_task() на каждую задачу в inbox.
+    # NB: inbox API does NOT return form_id, current_step, fields, approvals.
+    #     enrich=True is REQUIRED — otherwise filters won't work.
+    #     But that's +1 get_task() request per every inbox task.
     # asyncio.run(
     #     dp.start_inbox_polling(
     #         bot,
+    #         enrich=True,  # обязательно! / required!
     #         interval=60,
     #         skip_old=True,
     #         on_startup=on_startup,
@@ -111,7 +118,7 @@ if __name__ == "__main__":
     # asyncio.run(
     #     dp.start_polling(
     #         bot,
-    #         form_id=[361879, 123456, 789012],
+    #         form_id=[321, 123456, 789012],
     #         interval=30,
     #         skip_old=False,
     #     )

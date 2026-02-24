@@ -48,6 +48,38 @@ class TestTask:
         t = Task(id=1, fields=[])
         assert t.get_field("Missing") is None
 
+    def test_form_id_none_from_register(self):
+        """Task from register has form_id=None — mutable for backfill."""
+        t = Task(id=1, current_step=6)
+        assert t.form_id is None
+        t.form_id = 321
+        assert t.form_id == 321
+
+
+class TestFieldType:
+    def test_person_responsible(self):
+        """FieldType.person_responsible should be a valid enum value."""
+        assert FieldType("person_responsible") is FieldType.person_responsible
+
+    def test_all_common_types(self):
+        """Smoke test: common field types are parseable."""
+        for name in (
+            "text",
+            "money",
+            "number",
+            "date",
+            "due_date",
+            "person",
+            "catalog",
+            "multiple_choice",
+            "form_link",
+            "step",
+            "project",
+            "person_responsible",
+        ):
+            ft = FieldType(name)
+            assert ft.value == name
+
     def test_get_field_in_title(self):
         """Fields nested inside a title section are found recursively."""
         inner = FormField(id=10, name="Inner", type=FieldType.text, value="val")

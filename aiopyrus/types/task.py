@@ -193,7 +193,19 @@ class Comment(PyrusModel):
 
 
 class Task(PyrusModel):
-    """A Pyrus task — either a free task or a form task."""
+    """A Pyrus task — either a free task or a form task.
+
+    Задача Pyrus — свободная или по форме.
+
+    Note: field availability depends on the API endpoint:
+
+    - ``GET /inbox`` — only ``id``, ``author``, ``responsible``, ``text``,
+      ``create_date``, ``last_modified_date``.  Everything else is ``None``/empty.
+    - ``GET /forms/{id}/register`` — includes ``current_step`` and ``fields``,
+      but ``form_id`` is always ``None`` (API omits it since you query by form).
+    - ``GET /tasks/{id}`` — returns all fields including ``form_id``,
+      ``current_step``, ``fields``, ``approvals``, ``comments``, etc.
+    """
 
     id: int
     text: str | None = None

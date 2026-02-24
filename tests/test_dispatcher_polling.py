@@ -221,6 +221,95 @@ class TestStartPolling:
             # Should NOT raise — the error is logged and swallowed
             await dp.start_polling(bot, form_id=321, interval=0.01, skip_old=False)
 
+    async def test_backfills_form_id_from_query(self):
+        """Register API omits form_id; start_polling should backfill it."""
+        task = _make_task(1)
+        task.form_id = None  # simulate register response
+        bot = _make_bot([task])
+        dp = Dispatcher()
+        received_form_ids: list[int | None] = []
+
+        @dp.task_received()
+        async def handler(task):
+            received_form_ids.append(task.form_id)
+
+        poll_count = 0
+
+        async def fake_sleep(seconds):
+            nonlocal poll_count
+            poll_count += 1
+            if poll_count >= 1:
+                raise asyncio.CancelledError()
+
+        with patch("asyncio.sleep", side_effect=fake_sleep):
+            await dp.start_polling(bot, form_id=321, interval=0.01, skip_old=False)
+
+        assert received_form_ids == [321]
+
+    async def test_backfill_preserves_existing_form_id(self):
+        """If task already has form_id, backfill should NOT overwrite it."""
+        task = _make_task(1)
+        task.form_id = 999
+        bot = _make_bot([task])
+        dp = Dispatcher()
+        received_form_ids: list[int | None] = []
+
+        @dp.task_received()
+        async def handler(task):
+            received_form_ids.append(task.form_id)
+
+        poll_count = 0
+
+        async def fake_sleep(seconds):
+            nonlocal poll_count
+            poll_count += 1
+            if poll_count >= 1:
+                raise asyncio.CancelledError()
+
+        with patch("asyncio.sleep", side_effect=fake_sleep):
+            await dp.start_polling(bot, form_id=321, interval=0.01, skip_old=False)
+
+        assert received_form_ids == [999]
+
+    async def test_multi_form_polling(self):
+        """form_id=[A, B] should poll both and backfill correctly."""
+        task_a = _make_task(1)
+        task_a.form_id = None
+        task_b = _make_task(2)
+        task_b.form_id = None
+
+        bot = MagicMock()
+        bot.close = AsyncMock()
+
+        async def get_register_side_effect(fid, **kwargs):
+            if fid == 100:
+                return [task_a]
+            if fid == 200:
+                return [task_b]
+            return []
+
+        bot.get_register = AsyncMock(side_effect=get_register_side_effect)
+
+        dp = Dispatcher()
+        results: list[tuple[int, int | None]] = []
+
+        @dp.task_received()
+        async def handler(task):
+            results.append((task.id, task.form_id))
+
+        poll_count = 0
+
+        async def fake_sleep(seconds):
+            nonlocal poll_count
+            poll_count += 1
+            if poll_count >= 1:
+                raise asyncio.CancelledError()
+
+        with patch("asyncio.sleep", side_effect=fake_sleep):
+            await dp.start_polling(bot, form_id=[100, 200], interval=0.01, skip_old=False)
+
+        assert sorted(results) == [(1, 100), (2, 200)]
+
     async def test_api_error_backoff(self):
         """On API error, backoff is applied and polling retries."""
         bot = _make_bot(fail=True)

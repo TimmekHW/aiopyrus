@@ -351,7 +351,16 @@ class UserClient:
     # ------------------------------------------------------------------
 
     async def get_inbox(self, *, item_count: int | None = None) -> list[Task]:
-        """GET /inbox — tasks in the current user's inbox."""
+        """GET /inbox — tasks in the current user's inbox.
+
+        Задачи из входящих текущего пользователя.
+
+        **Warning:** the inbox API returns sparse data — only ``id``,
+        ``author``, ``responsible``, ``text``, ``create_date`` and
+        ``last_modified_date``.  Fields like ``form_id``, ``current_step``,
+        ``fields`` and ``approvals`` will be ``None``/empty.
+        Use ``get_task(id)`` to fetch full task data when needed.
+        """
         params: dict = {}
         if item_count is not None:
             params["item_count"] = item_count
@@ -406,7 +415,10 @@ class UserClient:
         modified_after: str | None = None,
         closed_before: str | None = None,
         closed_after: str | None = None,
-        # Фильтр по просрочке: "overdue" | "overdue_on_step" | "past_due"
+        # Фильтр по просрочке:
+        #   "overdue"         — задачи с истекшим общим сроком
+        #   "overdue_on_step" — просрочка на текущем этапе
+        #   "past_due"        — истёкший срок (общий или на этапе)
         due_filter: str | None = None,
         # Фильтр по id задачи (диапазон): например "gt12345" или "12345,12346"
         id_filter: str | None = None,
@@ -414,6 +426,15 @@ class UserClient:
         field_filters: dict[str, str] | None = None,
     ) -> list[Task]:
         """GET /forms/{form_id}/register — реестр задач по форме.
+
+        **Note:** the register API returns ``current_step`` and ``fields``,
+        but ``form_id`` is always ``None`` in the response (Pyrus omits it
+        since the form is already specified in the URL).
+        ``Dispatcher.start_polling()`` automatically backfills ``form_id``.
+        If you call this method directly, be aware of this.
+
+        ``approvals`` are also **not** returned — use ``get_task(id)``
+        if you need approval data.
 
         Параметры фильтрации полей (``field_filters``):
 

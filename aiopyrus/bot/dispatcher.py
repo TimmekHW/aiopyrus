@@ -205,12 +205,16 @@ class Dispatcher(Router):
         try:
             while True:
                 try:
-                    tasks = []
+                    tasks: list[tuple[int, Any]] = []
                     for fid in form_ids:
-                        tasks.extend(await bot.get_register(fid, steps=step_list))
+                        for t in await bot.get_register(fid, steps=step_list):
+                            tasks.append((fid, t))
                     backoff = _BACKOFF_BASE  # reset on success
 
-                    for task in tasks:
+                    for fid, task in tasks:
+                        # Register API omits form_id — backfill from the query
+                        if task.form_id is None:
+                            task.form_id = fid
                         stamp = str(task.last_modified_date or task.id)
                         if seen.get(task.id) == stamp:
                             continue
@@ -278,7 +282,17 @@ class Dispatcher(Router):
 
         Unlike :meth:`start_polling` (which polls specific form registers),
         this polls the **inbox** — all tasks requiring the user's attention,
-        across all forms. Useful for bots that monitor approval roles.
+        across all forms.
+
+        **Limitation:** the inbox API returns only ``id``, ``author``,
+        ``responsible``, ``text`` and dates.  It does **not** include
+        ``form_id``, ``current_step``, ``fields`` or ``approvals``.
+        Therefore ``FormFilter``, ``StepFilter``, ``FieldValueFilter``
+        and ``ApprovalPendingFilter`` will **not work** unless you set
+        ``enrich=True`` (which calls ``get_task()`` for every changed task).
+
+        For filtering by form/step, prefer :meth:`start_polling` with
+        ``form_id=[id1, id2, ...]`` — it is faster and returns richer data.
 
         Parameters
         ----------
@@ -290,8 +304,9 @@ class Dispatcher(Router):
             If ``True`` (default), the first poll is a snapshot only.
         enrich:
             If ``True``, fetch full task data via ``get_task()`` before
-            dispatching. Required for ``ApprovalPendingFilter`` because
-            inbox tasks may lack ``approvals`` data.
+            dispatching.  **Required** for any filter besides raw task id,
+            because the inbox API omits ``form_id``, ``current_step``,
+            ``fields`` and ``approvals``.
         on_startup / on_shutdown:
             Optional async callables executed at start/stop.
 
