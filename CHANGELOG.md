@@ -5,6 +5,14 @@ All notable changes to **aiopyrus** will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
+## [0.1.7] — 2026-02-24
+
+### Added
+- Example `09_auto_processing.py` — UserClient: task processing by link
+- Example `10_polling_auto_approve.py` — polling + FormFilter + StepFilter + ApprovalPendingFilter
+- Example `11_http_integration.py` — HTTP server (aiohttp) for external systems (PHP, 1C, etc.)
+- Example `12_embed_in_project.py` — embedding aiopyrus into FastAPI / Django / Celery / scripts
+
 ## [0.1.6] — 2026-02-24
 
 ### Fixed
