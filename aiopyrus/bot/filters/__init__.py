@@ -1,5 +1,6 @@
 from .base import AndFilter, Filter, NotFilter, OrFilter
 from .builtin import (
+    ApprovalPendingFilter,
     CreatedAfterFilter,
     EventFilter,
     FieldValueFilter,
@@ -21,6 +22,7 @@ __all__ = [
     "FormFilter",
     "StepFilter",
     "ResponsibleFilter",
+    "ApprovalPendingFilter",
     "TextFilter",
     "EventFilter",
     "FieldValueFilter",

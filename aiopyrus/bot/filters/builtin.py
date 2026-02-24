@@ -65,6 +65,42 @@ class ResponsibleFilter(Filter):
         return r is not None and r.id in self._ids
 
 
+class ApprovalPendingFilter(Filter):
+    """Match tasks where a specific person/role is waiting for approval on the current step.
+
+    Checks that the given ID appears in ``task.approvals[current_step - 1]``
+    with ``approval_choice`` equal to ``waiting`` or ``None``.
+
+    Usage::
+
+        # Tasks pending approval by role 5555
+        @router.task_received(ApprovalPendingFilter(5555))
+        async def on_my_approval(ctx): ...
+
+        # Tasks pending approval by any of several roles
+        @router.task_received(ApprovalPendingFilter([5555, 6666]))
+        async def on_multi(ctx): ...
+
+        # Combine with form filter
+        @router.task_received(FormFilter(321) & ApprovalPendingFilter(5555))
+        async def on_form_approval(ctx): ...
+    """
+
+    def __init__(self, person_id: int | list[int]) -> None:
+        self._ids: set[int] = {person_id} if isinstance(person_id, int) else set(person_id)
+
+    async def __call__(self, payload: WebhookPayload) -> bool:
+        task = payload.task
+        if not task.approvals or not task.current_step:
+            return False
+        step_idx = task.current_step - 1
+        if step_idx >= len(task.approvals):
+            return False
+        return any(
+            entry.person.id in self._ids and entry.is_waiting for entry in task.approvals[step_idx]
+        )
+
+
 class TextFilter(Filter):
     """Match tasks/comments whose text contains a substring (case-insensitive by default).
 
