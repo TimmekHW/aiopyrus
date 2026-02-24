@@ -249,6 +249,97 @@ class Dispatcher(Router):
                 await on_shutdown()
             await bot.close()
 
+    async def start_inbox_polling(
+        self,
+        bot: PyrusBot,
+        *,
+        interval: float = 30.0,
+        skip_old: bool = True,
+        on_startup: Any = None,
+        on_shutdown: Any = None,
+    ) -> None:
+        """Poll the inbox and dispatch tasks through handlers.
+
+        Unlike :meth:`start_polling` (which polls specific form registers),
+        this polls the **inbox** — all tasks requiring the user's attention,
+        across all forms. Useful for bots that monitor approval roles.
+
+        Example::
+
+            bot = PyrusBot(login="bot@...", security_key="KEY",
+                           base_url="https://pyrus.corp.ru")
+            dp = Dispatcher()
+
+            @dp.task_received(ApprovalPendingFilter(141636))
+            async def on_approval(ctx: TaskContext):
+                # notify manager
+                ...
+
+            asyncio.run(dp.start_inbox_polling(bot, interval=60))
+        """
+        from aiopyrus.types.webhook import WebhookPayload
+
+        if on_startup:
+            await on_startup()
+
+        log.info("Inbox polling started: interval=%.0fs  skip_old=%s", interval, skip_old)
+
+        seen: dict[int, str] = {}
+        is_first_poll = True
+
+        _BACKOFF_BASE = 5.0
+        _BACKOFF_MAX = 300.0
+        backoff = _BACKOFF_BASE
+
+        try:
+            while True:
+                try:
+                    tasks = await bot.get_inbox()
+                    backoff = _BACKOFF_BASE
+
+                    for task in tasks:
+                        stamp = str(task.last_modified_date or task.id)
+                        if seen.get(task.id) == stamp:
+                            continue
+                        seen[task.id] = stamp
+
+                        if is_first_poll and skip_old:
+                            continue
+
+                        payload = WebhookPayload(
+                            event="task_polled",
+                            task_id=task.id,
+                            task=task,
+                        )
+                        try:
+                            await self.process_event(payload, bot, middlewares=self._middlewares)
+                        except Exception:
+                            log.exception("Handler error for task_id=%d", task.id)
+
+                    if is_first_poll:
+                        if skip_old:
+                            log.info(
+                                "Inbox snapshot: %d tasks recorded, waiting for changes", len(seen)
+                            )
+                        is_first_poll = False
+
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    log.exception("Inbox polling error, retrying in %.0fs", backoff)
+                    await asyncio.sleep(backoff)
+                    backoff = min(backoff * 2, _BACKOFF_MAX)
+                    continue
+
+                await asyncio.sleep(interval)
+
+        except asyncio.CancelledError:
+            log.info("Inbox polling cancelled.")
+        finally:
+            if on_shutdown:
+                await on_shutdown()
+            await bot.close()
+
     async def start_webhook(
         self,
         bot: PyrusBot,
