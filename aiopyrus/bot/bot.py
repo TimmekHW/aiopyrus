@@ -14,10 +14,26 @@ class PyrusBot(UserClient):
     """Pyrus bot client — extends UserClient with webhook verification
     and bot-specific convenience methods.
 
+    PyrusBot inherits **all** UserClient methods (get_task, comment_task,
+    get_register, get_inbox, etc.). The only addition is ``verify_signature``
+    for webhook HMAC-SHA1 verification.
+
+    For polling mode there is no difference between PyrusBot and UserClient —
+    both work identically with ``Dispatcher.start_polling()``.
+
     Usage::
 
         bot = PyrusBot(login="bot@example", security_key="SECRET")
         await bot.auth()
+
+    On-premise::
+
+        bot = PyrusBot(
+            login="user@corp.ru",
+            security_key="KEY",
+            base_url="https://pyrus.mycompany.ru",
+            ssl_verify=False,
+        )
     """
 
     def __init__(

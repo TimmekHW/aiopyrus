@@ -280,6 +280,21 @@ class Dispatcher(Router):
         this polls the **inbox** — all tasks requiring the user's attention,
         across all forms. Useful for bots that monitor approval roles.
 
+        Parameters
+        ----------
+        bot:
+            Bot instance (already configured with credentials).
+        interval:
+            Seconds between polls (default ``30``).
+        skip_old:
+            If ``True`` (default), the first poll is a snapshot only.
+        enrich:
+            If ``True``, fetch full task data via ``get_task()`` before
+            dispatching. Required for ``ApprovalPendingFilter`` because
+            inbox tasks may lack ``approvals`` data.
+        on_startup / on_shutdown:
+            Optional async callables executed at start/stop.
+
         Example::
 
             bot = PyrusBot(login="bot@...", security_key="KEY",
@@ -291,7 +306,7 @@ class Dispatcher(Router):
                 # notify manager
                 ...
 
-            asyncio.run(dp.start_inbox_polling(bot, interval=60))
+            asyncio.run(dp.start_inbox_polling(bot, enrich=True, interval=60))
         """
         from aiopyrus.types.webhook import WebhookPayload
 

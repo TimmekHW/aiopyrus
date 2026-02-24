@@ -243,7 +243,7 @@ client = UserClient(
 
 ## Examples
 
-See [`examples/`](examples/) — 5 files from simple to advanced:
+See [`examples/`](examples/) — 7 files from simple to advanced:
 
 | File | Topic |
 |---|---|
@@ -252,6 +252,8 @@ See [`examples/`](examples/) — 5 files from simple to advanced:
 | [`03_bot_webhook.py`](examples/03_bot_webhook.py) | Webhook bot, routers, filters, middleware |
 | [`04_bot_polling.py`](examples/04_bot_polling.py) | Polling mode, skip_old, lifecycle hooks |
 | [`05_data_management.py`](examples/05_data_management.py) | Registers, catalogs, members, roles, files |
+| [`06_approval_bot.py`](examples/06_approval_bot.py) | Approval monitoring bot, `enrich`, inbox polling |
+| [`07_middleware_errors.py`](examples/07_middleware_errors.py) | Middleware, error handling, nested routers |
 
 ## FAQ
 

@@ -243,7 +243,7 @@ client = UserClient(
 
 ## Примеры
 
-В папке [`examples/`](examples/) — 5 файлов от простого к сложному:
+В папке [`examples/`](examples/) — 7 файлов от простого к сложному:
 
 | Файл | Тема |
 |---|---|
@@ -252,6 +252,8 @@ client = UserClient(
 | [`03_bot_webhook.py`](examples/03_bot_webhook.py) | Бот на вебхуках, роутеры, фильтры, middleware |
 | [`04_bot_polling.py`](examples/04_bot_polling.py) | Polling-режим, skip_old, lifecycle hooks |
 | [`05_data_management.py`](examples/05_data_management.py) | Реестры, каталоги, участники, роли, файлы |
+| [`06_approval_bot.py`](examples/06_approval_bot.py) | Бот-наблюдатель за согласованиями, `enrich`, inbox polling |
+| [`07_middleware_errors.py`](examples/07_middleware_errors.py) | Middleware, обработка ошибок, вложенные роутеры |
 
 ## FAQ
 
