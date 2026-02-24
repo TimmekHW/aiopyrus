@@ -121,6 +121,7 @@ class Dispatcher(Router):
         steps: list[int] | int | None = None,
         interval: float = 30.0,
         skip_old: bool = True,
+        enrich: bool = False,
         on_startup: Any = None,
         on_shutdown: Any = None,
     ) -> None:
@@ -141,6 +142,10 @@ class Dispatcher(Router):
             To poll all forms, call ``bot.get_forms()`` first and pass IDs.
         steps:
             Step number(s) to filter by. ``None`` — all steps.
+        enrich:
+            If ``True``, fetch full task data via ``get_task()`` before
+            dispatching. Required for ``ApprovalPendingFilter`` because
+            ``get_register()`` does not return ``approvals``.
         interval:
             Seconds between polls (default ``30``).
         skip_old:
@@ -215,10 +220,20 @@ class Dispatcher(Router):
                         if is_first_poll and skip_old:
                             continue
 
+                        # Enrich: fetch full task (approvals, etc.) via get_task
+                        dispatch_task = task
+                        if enrich:
+                            try:
+                                dispatch_task = await bot.get_task(task.id)
+                            except Exception:
+                                log.warning(
+                                    "Failed to enrich task %d, using register data", task.id
+                                )
+
                         payload = WebhookPayload(
                             event="task_polled",
                             task_id=task.id,
-                            task=task,
+                            task=dispatch_task,
                         )
                         try:
                             await self.process_event(payload, bot, middlewares=self._middlewares)
@@ -255,6 +270,7 @@ class Dispatcher(Router):
         *,
         interval: float = 30.0,
         skip_old: bool = True,
+        enrich: bool = False,
         on_startup: Any = None,
         on_shutdown: Any = None,
     ) -> None:
@@ -306,10 +322,17 @@ class Dispatcher(Router):
                         if is_first_poll and skip_old:
                             continue
 
+                        dispatch_task = task
+                        if enrich:
+                            try:
+                                dispatch_task = await bot.get_task(task.id)
+                            except Exception:
+                                log.warning("Failed to enrich task %d, using inbox data", task.id)
+
                         payload = WebhookPayload(
                             event="task_polled",
                             task_id=task.id,
-                            task=task,
+                            task=dispatch_task,
                         )
                         try:
                             await self.process_event(payload, bot, middlewares=self._middlewares)
