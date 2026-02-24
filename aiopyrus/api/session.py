@@ -161,8 +161,8 @@ class PyrusSession:
                 # auth_url = "https://pyrus.corp.ru/api/v4/auth" → api_url = "https://pyrus.corp.ru/v4/"
                 base = self._auth_url
                 if base.endswith("/auth"):
-                    # Strip "/auth" then replace "/api" with empty string
-                    self._api_url = base[:-5].replace("/api", "", 1)
+                    # Strip "/auth" then replace "/api" with empty string, ensure trailing slash
+                    self._api_url = base[:-5].replace("/api", "", 1).rstrip("/") + "/"
         if "files_url" in data:
             self._files_url = data["files_url"]
 
