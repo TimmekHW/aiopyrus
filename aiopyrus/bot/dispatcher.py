@@ -117,7 +117,7 @@ class Dispatcher(Router):
         self,
         bot: PyrusBot,
         *,
-        form_id: int,
+        form_id: int | list[int],
         steps: list[int] | int | None = None,
         interval: float = 30.0,
         skip_old: bool = True,
@@ -136,7 +136,9 @@ class Dispatcher(Router):
         bot:
             Bot instance (already configured with credentials).
         form_id:
-            Form to poll (e.g. ``321``).
+            Form(s) to poll. Single int or list of ints.
+            Pyrus API requires form_id — there is no "all forms" endpoint.
+            To poll all forms, call ``bot.get_forms()`` first and pass IDs.
         steps:
             Step number(s) to filter by. ``None`` — all steps.
         interval:
@@ -173,14 +175,15 @@ class Dispatcher(Router):
         """
         from aiopyrus.types.webhook import WebhookPayload
 
+        form_ids = [form_id] if isinstance(form_id, int) else list(form_id)
         step_list = [steps] if isinstance(steps, int) else steps
 
         if on_startup:
             await on_startup()
 
         log.info(
-            "Polling started: form_id=%d  steps=%s  interval=%.0fs  skip_old=%s",
-            form_id,
+            "Polling started: form_ids=%s  steps=%s  interval=%.0fs  skip_old=%s",
+            form_ids,
             step_list,
             interval,
             skip_old,
@@ -197,7 +200,9 @@ class Dispatcher(Router):
         try:
             while True:
                 try:
-                    tasks = await bot.get_register(form_id, steps=step_list)
+                    tasks = []
+                    for fid in form_ids:
+                        tasks.extend(await bot.get_register(fid, steps=step_list))
                     backoff = _BACKOFF_BASE  # reset on success
 
                     for task in tasks:
