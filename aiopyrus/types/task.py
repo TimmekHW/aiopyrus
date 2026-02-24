@@ -126,7 +126,7 @@ class Comment(PyrusModel):
     approval_choice: ApprovalChoice | None = None
     approval_step: int | None = None
     approvals_added: list[list[ApprovalEntry]] | None = None
-    approvals_removed: list[ApprovalEntry] | None = None
+    approvals_removed: list[list[ApprovalEntry]] | None = None
     approvals_rerequested: list[list[ApprovalEntry]] | None = None
 
     # --- Reassignment ---
