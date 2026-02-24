@@ -5,6 +5,13 @@ All notable changes to **aiopyrus** will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
+## [0.1.8] — 2026-02-24
+
+### Added
+- Pyright added to CI pipeline (ruff + pyright + pytest on 3.10–3.14)
+- GitHub Releases now auto-created from CHANGELOG on tag push
+- `pyright` added to `[dev]` dependencies
+
 ## [0.1.7] — 2026-02-24
 
 ### Added
