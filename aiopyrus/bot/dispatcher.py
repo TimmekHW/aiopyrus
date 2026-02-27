@@ -4,13 +4,47 @@ import asyncio
 import logging
 from typing import Any
 
+import httpx
+
 from aiopyrus.bot.bot import PyrusBot
 from aiopyrus.bot.middleware import BaseMiddleware
 from aiopyrus.bot.router import Router
-from aiopyrus.exceptions import PyrusWebhookSignatureError
+from aiopyrus.exceptions import PyrusAPIError, PyrusWebhookSignatureError
 from aiopyrus.types.webhook import BotResponse
 
 log = logging.getLogger("aiopyrus.dispatcher")
+
+
+def _log_polling_error(exc: Exception, backoff: float) -> None:
+    """Log a polling error — one-liner for known network/API issues,
+    full traceback only for unexpected exceptions."""
+    if isinstance(exc, PyrusAPIError):
+        log.error(
+            "Pyrus API error: %s (retry in %.0fs)",
+            exc,
+            backoff,
+        )
+    elif isinstance(exc, httpx.TimeoutException):
+        log.error(
+            "Network timeout: %s (retry in %.0fs)",
+            type(exc).__name__,
+            backoff,
+        )
+    elif isinstance(exc, httpx.ConnectError):
+        log.error(
+            "Connection failed: %s (retry in %.0fs)",
+            exc,
+            backoff,
+        )
+    elif isinstance(exc, (httpx.HTTPStatusError, httpx.TransportError)):
+        log.error(
+            "Network error: %s: %s (retry in %.0fs)",
+            type(exc).__name__,
+            exc,
+            backoff,
+        )
+    else:
+        log.exception("Unexpected polling error (retry in %.0fs)", backoff)
 
 
 class Dispatcher(Router):
@@ -253,8 +287,8 @@ class Dispatcher(Router):
 
                 except asyncio.CancelledError:
                     raise
-                except Exception:
-                    log.exception("Polling error, retrying in %.0fs", backoff)
+                except Exception as exc:
+                    _log_polling_error(exc, backoff)
                     await asyncio.sleep(backoff)
                     backoff = min(backoff * 2, _BACKOFF_MAX)
                     continue  # skip normal interval after an error
@@ -378,8 +412,8 @@ class Dispatcher(Router):
 
                 except asyncio.CancelledError:
                     raise
-                except Exception:
-                    log.exception("Inbox polling error, retrying in %.0fs", backoff)
+                except Exception as exc:
+                    _log_polling_error(exc, backoff)
                     await asyncio.sleep(backoff)
                     backoff = min(backoff * 2, _BACKOFF_MAX)
                     continue
@@ -426,9 +460,9 @@ class Dispatcher(Router):
         app = create_app(dispatcher=self, bot=bot, path=path, verify_signature=verify_signature)
 
         if on_startup:
-            app.on_startup.append(on_startup)
+            app.on_startup.append(lambda _app: on_startup())
         if on_shutdown:
-            app.on_shutdown.append(on_shutdown)
+            app.on_shutdown.append(lambda _app: on_shutdown())
 
         log.info("Starting webhook server on http://%s:%d%s", host, port, path)
         await run_app(app, host=host, port=port)

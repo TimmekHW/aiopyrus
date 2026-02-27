@@ -5,6 +5,16 @@ All notable changes to **aiopyrus** will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
+## [0.1.9] — 2026-02-27
+
+### Fixed
+- Polling: clean one-liner error logging for network/API errors instead of full traceback
+- Webhook `on_startup`/`on_shutdown` callbacks now work correctly (aiohttp `app` arg handled)
+- `ApprovalPendingFilter` now exported from `aiopyrus` top-level package
+
+### Added
+- Linux integration tests (Fedora 43, Python 3.14): imports, Ctrl+C, webhook, error logging
+
 ## [0.1.8] — 2026-02-24
 
 ### Added

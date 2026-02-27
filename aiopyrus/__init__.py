@@ -104,6 +104,7 @@ Full docs: ``aiopyrus.utils.context`` (module docstring).
 from .bot.bot import PyrusBot
 from .bot.dispatcher import Dispatcher
 from .bot.filters import (
+    ApprovalPendingFilter,
     EventFilter,
     F,
     FieldValueFilter,
@@ -158,7 +159,7 @@ from .types import (
 from .user.client import UserClient
 from .utils.context import TaskContext
 
-__version__ = "0.1.5"
+__version__ = "0.1.9"
 _CODENAME = "Перезрелая груша с кривым API"  # 🍐
 __all__ = [
     # Clients & context
@@ -177,6 +178,7 @@ __all__ = [
     "TextFilter",
     "EventFilter",
     "FieldValueFilter",
+    "ApprovalPendingFilter",
     # Types
     "Task",
     "Comment",

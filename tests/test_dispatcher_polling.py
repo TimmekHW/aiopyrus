@@ -359,7 +359,7 @@ class TestStartWebhook:
             mock_run.assert_called_once_with(mock_app, host="127.0.0.1", port=9090)
 
     async def test_start_webhook_with_callbacks(self):
-        """on_startup/on_shutdown are attached to the aiohttp app."""
+        """on_startup/on_shutdown are wrapped and attached to the aiohttp app."""
         dp = Dispatcher()
         bot = _make_bot()
 
@@ -381,5 +381,12 @@ class TestStartWebhook:
                 on_shutdown=shutdown,
             )
 
-            assert startup in mock_app.on_startup
-            assert shutdown in mock_app.on_shutdown
+            # Callbacks are wrapped in lambdas that ignore the aiohttp app arg
+            assert len(mock_app.on_startup) == 1
+            assert len(mock_app.on_shutdown) == 1
+
+            # Invoke the wrappers to verify they call the original callbacks
+            await mock_app.on_startup[0](mock_app)
+            await mock_app.on_shutdown[0](mock_app)
+            startup.assert_awaited_once()
+            shutdown.assert_awaited_once()
