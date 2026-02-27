@@ -64,13 +64,9 @@ jobs:
           path: dist/
 
       - name: Extract changelog for this version
-        id: changelog
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          BODY=$(awk "/^## \[${VERSION}\]/{found=1; next} /^## \[/{if(found) exit} found{print}" CHANGELOG.md)
-          echo "body<<CHANGELOG_EOF" >> "$GITHUB_OUTPUT"
-          echo "$BODY" >> "$GITHUB_OUTPUT"
-          echo "CHANGELOG_EOF" >> "$GITHUB_OUTPUT"
+          awk "/^## \[${VERSION}\]/{found=1; next} /^## \[/{if(found) exit} found{print}" CHANGELOG.md > /tmp/release_notes.md
 
       - name: Create GitHub Release
         env:
@@ -78,4 +74,4 @@ jobs:
         run: |
           gh release create "$GITHUB_REF_NAME" dist/* \
             --title "$GITHUB_REF_NAME" \
-            --notes "${{ steps.changelog.outputs.body }}"
+            --notes-file /tmp/release_notes.md
