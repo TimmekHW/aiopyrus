@@ -5,6 +5,44 @@ All notable changes to **aiopyrus** will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
+## [0.2.0] — 2026-02-27
+
+### Added
+- **Batch operations**: `get_tasks()`, `create_tasks()`, `delete_tasks()`, `task_contexts()` —
+  parallel task processing via `asyncio.gather`
+- **Typed batch params**: `NewTask`, `NewRole`, `RoleUpdate`, `MemberUpdate` — Pydantic request models for batch methods
+- **Batch roles/members**: `create_roles()`, `update_roles()`, `update_members()` — parallel org management
+- **Task lists**: `get_lists()`, `get_task_list()` — task list (project/kanban) support
+- **Print forms**: `download_print_form()`, `download_print_forms()` — PDF download (single & batch)
+- **CSV export**: `get_register_csv()` — registry export as CSV text
+- **Avatar**: `set_avatar()` — set member avatar by file GUID
+- **External IDs**: `get_member_external_id()`, `get_members_external_ids()`,
+  `get_roles_external_ids()` — AD/1C external ID resolution
+- **Calendar enrichment**: `get_calendar()` now supports `filter_mask`, `all_accessed_tasks`,
+  `item_count` parameters
+- **`TaskList` model** — recursive model for task lists/projects with children
+- **`FieldUpdate`** — smart field update builder: `text()`, `choice()`, `person()`, `catalog()`,
+  `checkmark()`, `from_field()` (auto-detects format by field type)
+- **`get_flat_fields()`** — recursive flatten of title/table nested fields
+- **`format_mention()`** — HTML @mention builder for `formatted_text` fields
+- **`select_fields()`** — client-side field projection from Pydantic models
+- **`create_mock_client()`** — AsyncMock factory with `spec=UserClient` for testing
+- **`PyrusSession.request_raw()`** — raw `httpx.Response` for non-JSON endpoints (PDF, CSV)
+- `Person.external_id` field for corp/on-premise instances
+
+### Fixed
+- **`comment_task()` attachments**: format `{"id": guid}` → `{"guid": guid}` — uploaded files
+  now actually appear in comments (4 call sites: create_task, comment_task, announcements)
+- **`TaskContext.reply()`**: Pyrus API ignores `reply_note_id` in the request body;
+  now builds `<quote data-noteid="...">` in `formatted_text` to create proper threaded replies
+- **Typed annotations**: `dict` → `PersonRef`, `dict[str, Any]`, `PrintFormItem` across
+  public API (client, bot, webhook, params) for better IDE support
+
+### Docs
+- File attachment examples (comment + field) in README
+- Approval step management (`approvals_rerequested`, `approvals_added`, `approvals_removed`)
+- `ctx.answer(private=True)` documented in method table
+
 ## [0.1.9] — 2026-02-27
 
 ### Fixed

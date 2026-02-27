@@ -578,7 +578,7 @@ class TestCreateTaskExtended:
         assert body["duration"] == 60
         assert body["parent_task_id"] == 9999
         assert body["list_ids"] == [1, 2]
-        assert body["attachments"] == [{"id": "guid1"}]
+        assert body["attachments"] == [{"guid": "guid1"}]
         await client.close()
 
 
@@ -648,7 +648,7 @@ class TestAnnouncementsExtended:
         await client.auth()
         await client.create_announcement(text="News", attachments=["guid1"])
         body = json.loads(respx.calls.last.request.content)
-        assert body["attachments"] == [{"id": "guid1"}]
+        assert body["attachments"] == [{"guid": "guid1"}]
         await client.close()
 
     @respx.mock
@@ -660,5 +660,5 @@ class TestAnnouncementsExtended:
         await client.auth()
         await client.comment_announcement(1, text="Reply", attachments=["guid2"])
         body = json.loads(respx.calls.last.request.content)
-        assert body["attachments"] == [{"id": "guid2"}]
+        assert body["attachments"] == [{"guid": "guid2"}]
         await client.close()

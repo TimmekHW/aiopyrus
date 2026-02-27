@@ -345,6 +345,29 @@ class PyrusSession:
     async def delete(self, path: str) -> dict:
         return await self.request("DELETE", path)
 
+    async def request_raw(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: dict | None = None,
+    ) -> httpx.Response:
+        """Аутентифицированный запрос, возвращающий сырой httpx.Response.
+
+        Make an authenticated API request and return the raw httpx.Response.
+        Used for endpoints that return non-JSON content (PDF, CSV).
+        """
+        base = self._api_url
+        url = f"{base.rstrip('/')}/{path.lstrip('/')}"
+        client = await self._get_client()
+        if not self._access_token:
+            await self.auth()
+        await self._rate_limiter.acquire()
+        headers = self._auth_headers()
+        response = await client.request(method, url, params=params, headers=headers)
+        response.raise_for_status()
+        return response
+
     # ------------------------------------------------------------------
     # Context manager support
     # ------------------------------------------------------------------

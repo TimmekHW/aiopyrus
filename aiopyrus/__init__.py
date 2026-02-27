@@ -124,6 +124,7 @@ from .exceptions import (
     PyrusRateLimitError,
     PyrusWebhookSignatureError,
 )
+from .testing import create_mock_client
 from .types import (
     Announcement,
     ApprovalChoice,
@@ -144,22 +145,31 @@ from .types import (
     FormField,
     FormLinkValue,
     InboxResponse,
+    MemberUpdate,
     MultipleChoiceValue,
+    NewRole,
+    NewTask,
     Person,
+    PersonRef,
+    PrintFormItem,
     Profile,
     RegisterResponse,
     Role,
+    RoleUpdate,
     SubscriberEntry,
     TableRow,
     Task,
+    TaskList,
+    TaskStep,
     TitleValue,
     UploadedFile,
     WebhookPayload,
 )
 from .user.client import UserClient
 from .utils.context import TaskContext
+from .utils.fields import FieldUpdate, format_mention, get_flat_fields, select_fields
 
-__version__ = "0.1.9"
+__version__ = "0.2.0"
 _CODENAME = "Перезрелая груша с кривым API"  # 🍐
 __all__ = [
     # Clients & context
@@ -181,6 +191,8 @@ __all__ = [
     "ApprovalPendingFilter",
     # Types
     "Task",
+    "TaskList",
+    "TaskStep",
     "Comment",
     "ApprovalChoice",
     "ApprovalEntry",
@@ -210,6 +222,20 @@ __all__ = [
     "Announcement",
     "WebhookPayload",
     "BotResponse",
+    # Request params & type aliases
+    "PersonRef",
+    "NewTask",
+    "NewRole",
+    "RoleUpdate",
+    "MemberUpdate",
+    "PrintFormItem",
+    # Utilities
+    "FieldUpdate",
+    "get_flat_fields",
+    "format_mention",
+    "select_fields",
+    # Testing
+    "create_mock_client",
     # Exceptions
     "PyrusError",
     "PyrusAPIError",

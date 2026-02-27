@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from enum import Enum
+from typing import Any
+
+from pydantic import field_validator
 
 from .base import PyrusModel
 
@@ -37,6 +40,23 @@ class Person(PyrusModel):
     banned: bool | None = False  # account blocked by admin
     # Task delegation: tasks assigned to this person go to task_receiver instead
     task_receiver: int | None = None
+    # External ID (corp / on-premise instances — maps to AD, 1C, etc.)
+    external_id: int | None = None
+    # Avatar
+    avatar_id: int | None = None
+    external_avatar_id: int | None = None
+    # Location / messenger
+    location: str | None = None  # physical city / office (e.g. "Владивосток")
+    skype: str | None = None
+    messenger: dict[str, Any] | None = None  # {"type": "Internet", "nickname": "..."}
+
+    @field_validator("external_id", mode="before")
+    @classmethod
+    def _coerce_external_id(cls, v: object) -> int | None:
+        """Pyrus API returns external_id as empty string when unset."""
+        if v is None or v == "":
+            return None
+        return int(v)  # type: ignore[arg-type]
 
     @property
     def full_name(self) -> str:
@@ -78,6 +98,6 @@ class Profile(PyrusModel):
     last_name: str = ""
     email: str | None = None
     locale: str | None = None
-    time_zone: str | None = None
+    timezone_offset: int | None = None  # minutes offset from UTC (e.g. 180 = UTC+3)
     organization_id: int | None = None
     organization: Organization | None = None

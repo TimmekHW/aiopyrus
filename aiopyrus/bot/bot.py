@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
+from aiopyrus.types.params import PersonRef
 from aiopyrus.types.task import ApprovalChoice, Task, TaskAction
 from aiopyrus.types.webhook import WebhookPayload
 from aiopyrus.user.client import UserClient
@@ -76,7 +78,7 @@ class PyrusBot(UserClient):
         """Verify the HMAC-SHA1 signature from the ``X-Pyrus-Sig`` header."""
         return verify_webhook_signature(body, signature, self._security_key)
 
-    def parse_webhook(self, data: dict) -> WebhookPayload:
+    def parse_webhook(self, data: dict[str, Any]) -> WebhookPayload:
         """Parse a raw webhook payload dict into a :class:`WebhookPayload`."""
         return WebhookPayload.model_validate(data)
 
@@ -114,12 +116,12 @@ class PyrusBot(UserClient):
             task_id, approval_choice=ApprovalChoice.acknowledged, text=text
         )
 
-    async def reassign(self, task_id: int, to: int | dict, *, text: str | None = None) -> Task:
+    async def reassign(self, task_id: int, to: PersonRef, *, text: str | None = None) -> Task:
         """Reassign the task to another person."""
         return await self.comment_task(task_id, reassign_to=to, text=text)
 
     async def update_fields(
-        self, task_id: int, updates: list[dict], *, text: str | None = None
+        self, task_id: int, updates: list[dict[str, Any]], *, text: str | None = None
     ) -> Task:
         """Update form fields and optionally leave a comment."""
         return await self.comment_task(task_id, field_updates=updates, text=text)

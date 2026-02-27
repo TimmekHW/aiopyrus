@@ -19,6 +19,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from pydantic import BaseModel
+
     from aiopyrus.types.form import FormField
 
 
@@ -191,3 +195,91 @@ class FieldUpdate:
             f"Field {field.id!r} ({field.name!r}) has unsupported type {ftype!r}. "
             f"Build the update dict manually."
         )
+
+
+# ------------------------------------------------------------------
+# Utilities
+# ------------------------------------------------------------------
+
+
+def get_flat_fields(fields: list[FormField]) -> list[FormField]:
+    """Рекурсивный flatten всех полей из title-секций и таблиц.
+
+    Recursively flatten all leaf fields from title sections and table rows.
+
+    Title-поля содержат вложенные поля (через TitleValue.fields).
+    Table-поля содержат строки, каждая из которых содержит ячейки (FormField).
+    Эта функция обходит всё дерево и возвращает плоский список листьев —
+    полезно для итерации без ручной рекурсии.
+
+    Example::
+
+        from aiopyrus.utils.fields import get_flat_fields
+
+        flat = get_flat_fields(task.fields)
+        for f in flat:
+            print(f"{f.name}: {f.value}")
+    """
+    result: list[FormField] = []
+    _flatten_recursive(fields, result)
+    return result
+
+
+def _flatten_recursive(fields: list[FormField], result: list[FormField]) -> None:
+    for field in fields:
+        ftype = field.type.value if field.type else None
+
+        if ftype == "title":
+            title = field.as_title()
+            if title and title.fields:
+                _flatten_recursive(title.fields, result)
+            else:
+                result.append(field)
+        elif ftype == "table":
+            rows = field.as_table_rows()
+            for row in rows:
+                _flatten_recursive(row.cells, result)
+        else:
+            result.append(field)
+
+
+def format_mention(
+    person_id: int,
+    header: str = "",
+    text: str = "",
+) -> str:
+    """HTML @упоминание для formatted_text полей Pyrus.
+
+    Build an HTML @mention span for Pyrus ``formatted_text`` fields.
+
+    Возвращает ``<span>`` с ``data-personid`` который Pyrus UI
+    рендерит как кликабельное @упоминание.
+
+    Example::
+
+        html = format_mention(100500, header="Данил Колбасенко")
+        await client.comment_task(task_id, formatted_text=html)
+    """
+    span = f'<span data-personid="{person_id}">{header}</span>'
+    if text:
+        return f"{span} {text}"
+    return span
+
+
+def select_fields(
+    items: Sequence[BaseModel],
+    fields: set[str],
+) -> list[dict[str, Any]]:
+    """Клиентская выборка полей из списка Pydantic-моделей.
+
+    Select specific fields from a list of Pydantic models.
+
+    Конвертирует каждую модель в dict и оставляет только указанные ключи.
+    Полезно для уменьшения данных перед сериализацией или логированием.
+
+    Example::
+
+        tasks = await client.get_register(321)
+        slim = select_fields(tasks, {"id", "current_step", "fields"})
+    """
+    return [{k: v for k, v in item.model_dump().items() if k in fields} for item in items]

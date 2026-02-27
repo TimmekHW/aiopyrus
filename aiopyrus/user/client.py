@@ -19,11 +19,21 @@ from aiopyrus.types.task import (
     CommentChannel,
     Task,
     TaskAction,
+    TaskList,
 )
 from aiopyrus.types.user import ContactsResponse, Person, Profile, Role
 
 if TYPE_CHECKING:
     from aiopyrus.utils.context import TaskContext
+
+from aiopyrus.types.params import (
+    MemberUpdate,
+    NewRole,
+    NewTask,
+    PersonRef,
+    PrintFormItem,
+    RoleUpdate,
+)
 
 log = logging.getLogger("aiopyrus.client")
 
@@ -115,13 +125,13 @@ class UserClient:
         subject: str | None = None,
         # Form task
         form_id: int | None = None,
-        fields: list[dict] | None = None,
+        fields: list[dict[str, Any]] | None = None,
         fill_defaults: bool | None = None,
-        approvals: list[list[dict | int]] | None = None,
+        approvals: list[list[PersonRef]] | None = None,
         # People
-        responsible: dict | int | None = None,
-        participants: list[dict | int] | None = None,
-        subscribers: list[dict | int] | None = None,
+        responsible: PersonRef | None = None,
+        participants: list[PersonRef] | None = None,
+        subscribers: list[PersonRef] | None = None,
         # Time
         due_date: str | None = None,
         due: str | None = None,
@@ -175,7 +185,7 @@ class UserClient:
         if list_ids is not None:
             payload["list_ids"] = list_ids
         if attachments is not None:
-            payload["attachments"] = [{"id": a} for a in attachments]
+            payload["attachments"] = [{"guid": a} for a in attachments]
 
         data = await self._session.post("tasks", json=payload)
         return Task.model_validate(data.get("task", data))
@@ -188,24 +198,29 @@ class UserClient:
         formatted_text: str | None = None,
         # Editing an existing comment
         edit_comment_id: int | None = None,
-        # Threading — reply to a specific comment
+        # Threading — reply to a specific comment.
+        # Note: maps to ``reply_note_id`` in the JSON payload, but the Pyrus
+        # API treats this field as *read-only* and ignores it.  To actually
+        # create a threaded reply, include a ``<quote data-noteid="...">``
+        # tag inside *formatted_text*.  See ``TaskContext.reply()`` for the
+        # high-level helper that does this automatically.
         reply_to_comment_id: int | None = None,
         # Workflow
         action: TaskAction | str | None = None,
         # Approvals
         approval_choice: ApprovalChoice | str | None = None,
-        approvals_added: list[list[dict | int]] | None = None,
-        approvals_removed: list[dict | int] | None = None,
-        approvals_rerequested: list[dict | int] | None = None,
+        approvals_added: list[list[PersonRef]] | None = None,
+        approvals_removed: list[PersonRef] | None = None,
+        approvals_rerequested: list[PersonRef] | None = None,
         # People
-        reassign_to: dict | int | None = None,
-        participants_added: list[dict | int] | None = None,
-        participants_removed: list[dict | int] | None = None,
-        subscribers_added: list[dict | int] | None = None,
-        subscribers_removed: list[dict | int] | None = None,
-        subscribers_rerequested: list[dict | int] | None = None,
+        reassign_to: PersonRef | None = None,
+        participants_added: list[PersonRef] | None = None,
+        participants_removed: list[PersonRef] | None = None,
+        subscribers_added: list[PersonRef] | None = None,
+        subscribers_removed: list[PersonRef] | None = None,
+        subscribers_rerequested: list[PersonRef] | None = None,
         # Form fields
-        field_updates: list[dict] | None = None,
+        field_updates: list[dict[str, Any]] | None = None,
         # Lists
         added_list_ids: list[int] | None = None,
         removed_list_ids: list[int] | None = None,
@@ -229,14 +244,14 @@ class UserClient:
         # External channel (send comment via email / telegram / sms …)
         channel: CommentChannel | str | None = None,
         # Send comment on behalf of a role (corp instances)
-        comment_as_roles: list[dict | int] | None = None,
+        comment_as_roles: list[PersonRef] | None = None,
     ) -> Task:
         """POST /tasks/{task_id}/comments — add a comment / modify a task.
 
         Returns the updated task.
         """
 
-        def _persons(items: list[dict | int]) -> list[dict]:
+        def _persons(items: list[PersonRef]) -> list[dict[str, Any]]:
             return [{"id": p} if isinstance(p, int) else p for p in items]
 
         payload: dict[str, Any] = {}
@@ -295,7 +310,7 @@ class UserClient:
         if spent_minutes is not None:
             payload["spent_minutes"] = spent_minutes
         if attachments is not None:
-            payload["attachments"] = [{"id": a} for a in attachments]
+            payload["attachments"] = [{"guid": a} for a in attachments]
         if skip_notification is not None:
             payload["skip_notification"] = skip_notification
         if skip_satisfaction is not None:
@@ -372,13 +387,34 @@ class UserClient:
         *,
         from_date: str | None = None,
         to_date: str | None = None,
+        filter_mask: int | None = None,
+        all_accessed_tasks: bool | None = None,
+        item_count: int | None = None,
     ) -> list[Task]:
-        """GET /calendar — scheduled tasks."""
-        params: dict = {}
+        """GET /calendar — scheduled tasks.
+
+        Задачи из календаря.
+
+        Args:
+            from_date: Начало периода (YYYY-MM-DD). По умолчанию — сегодня.
+            to_date:   Конец периода (YYYY-MM-DD). По умолчанию — +1 неделя.
+            filter_mask: Битовая маска типов задач:
+                1 = Due, 2 = DueDate, 4 = DueForCurrentStep, 8 = Reminded.
+                Комбинируй через ``|``: ``filter_mask=1|4``.
+            all_accessed_tasks: Включить задачи из всех доступных форм.
+            item_count: Макс. количество задач (не более 100).
+        """
+        params: dict[str, Any] = {}
         if from_date:
             params["from"] = from_date
         if to_date:
             params["to"] = to_date
+        if filter_mask is not None:
+            params["filter_mask"] = filter_mask
+        if all_accessed_tasks is not None:
+            params["all_accessed_tasks"] = "y" if all_accessed_tasks else "n"
+        if item_count is not None:
+            params["item_count"] = item_count
         data = await self._session.get("calendar", params=params or None)
         return [Task.model_validate(t) for t in data.get("tasks", [])]
 
@@ -506,6 +542,72 @@ class UserClient:
         data = await self._session.post(f"forms/{form_id}/register", json=filters)
         return [Task.model_validate(t) for t in data.get("tasks", [])]
 
+    async def get_register_csv(
+        self,
+        form_id: int,
+        *,
+        steps: list[int] | None = None,
+        include_archived: bool = False,
+        field_ids: list[int] | None = None,
+        item_count: int | None = None,
+        created_before: str | None = None,
+        created_after: str | None = None,
+        modified_before: str | None = None,
+        modified_after: str | None = None,
+        closed_before: str | None = None,
+        closed_after: str | None = None,
+        due_filter: str | None = None,
+        field_filters: dict[str, str] | None = None,
+        delimiter: str | None = None,
+    ) -> str:
+        """GET /forms/{form_id}/register?format=csv — реестр в CSV.
+
+        Export form register as CSV text.
+
+        Возвращает строку CSV. Параметры фильтрации аналогичны ``get_register()``.
+
+        Args:
+            delimiter: Разделитель CSV (по умолчанию ``,``).
+
+        Example::
+
+            csv_text = await client.get_register_csv(321, steps=[1, 2])
+            with open("export.csv", "w", encoding="utf-8") as f:
+                f.write(csv_text)
+        """
+        params: dict[str, Any] = {"format": "csv"}
+        if steps:
+            params["steps"] = ",".join(str(s) for s in steps)
+        if include_archived:
+            params["include_archived"] = "y"
+        if field_ids:
+            params["field_ids"] = ",".join(str(i) for i in field_ids)
+        if item_count is not None:
+            params["item_count"] = item_count
+        if created_before:
+            params["created_before"] = created_before
+        if created_after:
+            params["created_after"] = created_after
+        if modified_before:
+            params["modified_before"] = modified_before
+        if modified_after:
+            params["modified_after"] = modified_after
+        if closed_before:
+            params["closed_before"] = closed_before
+        if closed_after:
+            params["closed_after"] = closed_after
+        if due_filter:
+            params["due_filter"] = due_filter
+        if field_filters:
+            params.update(field_filters)
+        if delimiter:
+            params["delimiter"] = delimiter
+
+        response = await self._session.request_raw(
+            "GET", f"forms/{form_id}/register", params=params
+        )
+        return response.text
+
     async def search_tasks(
         self,
         forms: dict[int, list[int] | None],
@@ -557,6 +659,37 @@ class UserClient:
                 continue
             result.extend(batch)
         return result
+
+    # ------------------------------------------------------------------
+    # Task Lists
+    # ------------------------------------------------------------------
+
+    async def get_lists(self) -> list[TaskList]:
+        """GET /lists — все списки задач (проекты / канбан-доски).
+
+        All task lists accessible to the current user.
+        """
+        data = await self._session.get("lists")
+        return [TaskList.model_validate(lst) for lst in data.get("lists", [])]
+
+    async def get_task_list(
+        self,
+        list_id: int,
+        *,
+        item_count: int | None = None,
+        include_archived: bool = False,
+    ) -> list[Task]:
+        """POST /lists/{list_id}/tasks — задачи из конкретного списка.
+
+        Tasks in a specific list.
+        """
+        payload: dict[str, Any] = {}
+        if item_count is not None:
+            payload["item_count"] = item_count
+        if include_archived:
+            payload["include_archived"] = True
+        data = await self._session.post(f"lists/{list_id}/tasks", json=payload or None)
+        return [Task.model_validate(t) for t in data.get("tasks", [])]
 
     # ------------------------------------------------------------------
     # Internal WCF API (experimental / on-premise)
@@ -683,11 +816,13 @@ class UserClient:
         log.debug("← %d  keys=%s", response.status_code, list(data.keys()))
         return data
 
-    async def get_form_permissions(self, form_id: int) -> dict:
+    async def get_form_permissions(self, form_id: int) -> dict[str, Any]:
         """GET /forms/{form_id}/permissions."""
         return await self._session.get(f"forms/{form_id}/permissions")
 
-    async def set_form_permissions(self, form_id: int, permissions: dict) -> dict:
+    async def set_form_permissions(
+        self, form_id: int, permissions: dict[str, Any]
+    ) -> dict[str, Any]:
         """POST /forms/{form_id}/permissions — set user access levels."""
         return await self._session.post(
             f"forms/{form_id}/permissions", json={"permissions": permissions}
@@ -710,7 +845,7 @@ class UserClient:
     async def create_catalog(
         self,
         name: str,
-        headers: list[str | dict],
+        headers: list[str | dict[str, Any]],
         items: list[list[str]],
     ) -> Catalog:
         """PUT /catalogs — create a new catalog."""
@@ -726,7 +861,7 @@ class UserClient:
         self,
         catalog_id: int,
         *,
-        headers: list[str | dict],
+        headers: list[str | dict[str, Any]],
         items: list[list[str]],
         apply: bool = True,
     ) -> CatalogSyncResult:
@@ -792,6 +927,50 @@ class UserClient:
         response.raise_for_status()
         return response.content
 
+    async def download_print_form(self, task_id: int, print_form_id: int) -> bytes:
+        """GET /tasks/{task_id}/print_forms/{print_form_id} — скачать печатную форму (PDF).
+
+        Download a print form as PDF bytes.
+
+        Args:
+            task_id: ID задачи.
+            print_form_id: ID шаблона печатной формы (из ``Form.print_forms``).
+
+        Returns:
+            Сырые байты PDF.
+        """
+        response = await self._session.request_raw(
+            "GET", f"tasks/{task_id}/print_forms/{print_form_id}"
+        )
+        return response.content
+
+    async def download_print_forms(
+        self,
+        items: list[PrintFormItem],
+    ) -> list[bytes | BaseException]:
+        """Скачать несколько печатных форм параллельно.
+
+        Download multiple print forms in parallel.
+
+        Args:
+            items: Список ``PrintFormItem(task_id=..., print_form_id=...)`` объектов.
+
+        Returns:
+            Список байтов PDF или BaseException для ошибок.
+
+        Example::
+
+            from aiopyrus.types.params import PrintFormItem
+
+            pdfs = await client.download_print_forms([
+                PrintFormItem(task_id=12345678, print_form_id=1),
+                PrintFormItem(task_id=12345679, print_form_id=2),
+            ])
+        """
+        coros = [self.download_print_form(item.task_id, item.print_form_id) for item in items]
+        results = await asyncio.gather(*coros, return_exceptions=True)
+        return list(results)
+
     # ------------------------------------------------------------------
     # Contacts & Members
     # ------------------------------------------------------------------
@@ -837,6 +1016,26 @@ class UserClient:
     async def update_member(self, member_id: int, **fields: Any) -> Person:
         """PUT /members/{member_id} — update member profile fields."""
         data = await self._session.put(f"members/{member_id}", json=fields)
+        return Person.model_validate(data)
+
+    async def set_avatar(self, member_id: int, file_guid: str) -> Person:
+        """POST /members/{member_id}/avatar — установить аватар.
+
+        Set a member's avatar.
+
+        Args:
+            member_id: ID сотрудника.
+            file_guid: GUID ранее загруженного файла (из ``upload_file()``).
+
+        Example::
+
+            uploaded = await client.upload_file("photo.jpg")
+            person = await client.set_avatar(100500, uploaded.guid)
+        """
+        data = await self._session.post(
+            f"members/{member_id}/avatar",
+            json={"file_guid": file_guid},
+        )
         return Person.model_validate(data)
 
     async def block_member(self, member_id: int) -> bool:
@@ -916,6 +1115,28 @@ class UserClient:
 
         task = await self.get_task(task_id)
         return TaskContext(task, self)
+
+    async def task_contexts(self, task_ids: list[int]) -> list[TaskContext]:
+        """Получить несколько TaskContext параллельно — батч-версия ``task_context()``.
+
+        Fetch multiple TaskContext objects in parallel.
+
+        Задачи, которые не удалось загрузить (404, 403), пропускаются.
+
+        Example::
+
+            ctxs = await client.task_contexts([1001, 1002, 1003])
+            ctxs[0].set("Статус", "Выполнена")
+            ctxs[1].set("Статус", "В работе")
+            await asyncio.gather(
+                ctxs[0].approve("OK"),
+                ctxs[1].answer("Принято в работу"),
+            )
+        """
+        from aiopyrus.utils.context import TaskContext
+
+        tasks = await self.get_tasks(task_ids)
+        return [TaskContext(task, self) for task in tasks]
 
     async def get_form_choices(self, form_id: int, field_id: int) -> dict[str, int]:
         """Получить варианты multiple_choice поля в виде {название: choice_id}.
@@ -1007,7 +1228,7 @@ class UserClient:
         """POST /announcements."""
         payload: dict[str, Any] = {"text": text}
         if attachments:
-            payload["attachments"] = [{"id": a} for a in attachments]
+            payload["attachments"] = [{"guid": a} for a in attachments]
         data = await self._session.post("announcements", json=payload)
         return Announcement.model_validate(data.get("announcement", data))
 
@@ -1021,6 +1242,163 @@ class UserClient:
         """POST /announcements/{id}/comments."""
         payload: dict[str, Any] = {"text": text}
         if attachments:
-            payload["attachments"] = [{"id": a} for a in attachments]
+            payload["attachments"] = [{"guid": a} for a in attachments]
         data = await self._session.post(f"announcements/{announcement_id}/comments", json=payload)
         return Announcement.model_validate(data.get("announcement", data))
+
+    # ------------------------------------------------------------------
+    # External ID resolution (corp / on-premise)
+    # ------------------------------------------------------------------
+
+    async def get_member_external_id(self, member_id: int) -> int | None:
+        """Получить external_id сотрудника (корп / on-premise).
+
+        Get the external_id of a member (corp / on-premise instances).
+
+        Возвращает None если инстанс не поддерживает external_id
+        или у сотрудника его нет.
+        """
+        person = await self.get_member(member_id)
+        return person.external_id
+
+    async def get_members_external_ids(self, member_ids: list[int]) -> list[int | None]:
+        """Получить external_id для нескольких сотрудников параллельно.
+
+        Get external_ids for multiple members in parallel.
+        """
+        coros = [self.get_member_external_id(mid) for mid in member_ids]
+        results = await asyncio.gather(*coros, return_exceptions=True)
+        return [None if isinstance(r, BaseException) else r for r in results]
+
+    async def get_roles_external_ids(self, role_ids: list[int]) -> list[int | None]:
+        """Получить external_id для ролей.
+
+        Get external_ids for roles (wraps get_member for each role).
+        """
+        return await self.get_members_external_ids(role_ids)
+
+    # ------------------------------------------------------------------
+    # Batch task operations
+    # ------------------------------------------------------------------
+
+    async def get_tasks(self, task_ids: list[int]) -> list[Task]:
+        """Получить несколько задач по ID параллельно.
+
+        Fetch multiple tasks by ID in parallel.
+        Ошибки (404, 403 и т.д.) логируются и пропускаются.
+        """
+        coros = [self.get_task(tid) for tid in task_ids]
+        results = await asyncio.gather(*coros, return_exceptions=True)
+        tasks: list[Task] = []
+        for tid, result in zip(task_ids, results, strict=True):
+            if isinstance(result, BaseException):
+                log.warning("get_tasks: task %d failed: %s", tid, result)
+                continue
+            tasks.append(result)
+        return tasks
+
+    async def create_tasks(self, tasks: list[NewTask]) -> list[Task | BaseException]:
+        """Создать несколько задач параллельно.
+
+        Create multiple tasks in parallel.
+
+        Args:
+            tasks: Список ``NewTask`` с параметрами для каждой задачи.
+
+        Returns:
+            Список Task или BaseException для каждого входа.
+
+        Example::
+
+            from aiopyrus.types.params import NewTask
+
+            results = await client.create_tasks([
+                NewTask(form_id=321, fields=[...]),
+                NewTask(text="Простая задача"),
+            ])
+        """
+        coros = [self.create_task(**t.model_dump(exclude_none=True)) for t in tasks]
+        results = await asyncio.gather(*coros, return_exceptions=True)
+        return list(results)
+
+    async def delete_tasks(self, task_ids: list[int]) -> list[bool]:
+        """Удалить несколько задач параллельно.
+
+        Delete multiple tasks in parallel.
+
+        Returns:
+            Список bool (True = удалена, False = ошибка).
+        """
+        coros = [self.delete_task(tid) for tid in task_ids]
+        results = await asyncio.gather(*coros, return_exceptions=True)
+        return [r if isinstance(r, bool) else False for r in results]
+
+    # ------------------------------------------------------------------
+    # Batch role / member operations
+    # ------------------------------------------------------------------
+
+    async def create_roles(self, roles: list[NewRole]) -> list[Role | BaseException]:
+        """Создать несколько ролей параллельно.
+
+        Create multiple roles in parallel.
+
+        Example::
+
+            from aiopyrus.types.params import NewRole
+
+            results = await client.create_roles([
+                NewRole(name="Administrators", member_ids=[100500, 100501]),
+                NewRole(name="Viewers"),
+            ])
+        """
+        coros = [self.create_role(r.name, r.member_ids) for r in roles]
+        results = await asyncio.gather(*coros, return_exceptions=True)
+        return list(results)
+
+    async def update_roles(self, updates: list[RoleUpdate]) -> list[Role | BaseException]:
+        """Обновить несколько ролей параллельно.
+
+        Update multiple roles in parallel.
+
+        Example::
+
+            from aiopyrus.types.params import RoleUpdate
+
+            results = await client.update_roles([
+                RoleUpdate(role_id=42, name="Super Admins"),
+                RoleUpdate(role_id=43, banned=True),
+            ])
+        """
+        coros = [
+            self.update_role(
+                u.role_id,
+                **u.model_dump(exclude={"role_id"}, exclude_none=True),
+            )
+            for u in updates
+        ]
+        results = await asyncio.gather(*coros, return_exceptions=True)
+        return list(results)
+
+    async def update_members(self, updates: list[MemberUpdate]) -> list[Person | BaseException]:
+        """Обновить несколько сотрудников параллельно.
+
+        Update multiple members in parallel.
+
+        Example::
+
+            from aiopyrus.types.params import MemberUpdate
+
+            results = await client.update_members([
+                MemberUpdate(member_id=100500, position="Lead Developer"),
+                MemberUpdate(member_id=100501, status="В отпуске"),
+            ])
+        """
+        coros = [
+            self.update_member(
+                u.member_id,
+                **u.model_dump(exclude={"member_id"}, exclude_none=True),
+            )
+            for u in updates
+        ]
+        results = await asyncio.gather(*coros, return_exceptions=True)
+        return list(results)

@@ -95,6 +95,7 @@ Python 3.10+
 | `ctx.discard()` | Отмена накопленных `set()` |
 | `ctx.pending_count()` | Сколько `set()` ждут отправки |
 | `await ctx.answer("текст")` | Комментарий + сброс всех `set()` |
+| `await ctx.answer("текст", private=True)` | Приватный комментарий |
 | `await ctx.approve("текст")` | Утвердить шаг согласования |
 | `await ctx.reject("текст")` | Отклонить шаг согласования |
 | `await ctx.finish("текст")` | Завершить задачу |
@@ -206,8 +207,15 @@ async with UserClient(login=LOGIN, security_key=KEY) as client:
     # Реестр с фильтрами
     tasks = await client.get_register(321, steps=[1, 2], due_filter="overdue")
 
+    # CSV-экспорт реестра
+    csv_text = await client.get_register_csv(321, steps=[1, 2])
+
     # Параллельный поиск по нескольким формам
     all_tasks = await client.search_tasks({321: [1, 2], 322: None})
+
+    # Списки задач (проекты / канбан-доски)
+    lists = await client.get_lists()
+    list_tasks = await client.get_task_list(lists[0].id)
 
     # Каталоги
     catalogs = await client.get_catalogs()
@@ -218,6 +226,10 @@ async with UserClient(login=LOGIN, security_key=KEY) as client:
     person = await client.find_member("Данил Колбасенко")
     members = await client.get_members()
 
+    # Аватар
+    uploaded = await client.upload_file("photo.jpg")
+    await client.set_avatar(person.id, uploaded.guid)
+
     # Роли
     roles = await client.get_roles()
 
@@ -225,9 +237,129 @@ async with UserClient(login=LOGIN, security_key=KEY) as client:
     uploaded = await client.upload_file("/path/to/file.pdf")
     content = await client.download_file("guid")
 
+    # Прикрепить файл к комментарию
+    await client.comment_task(task_id, text="Документ", attachments=[uploaded.guid])
+
+    # Прикрепить файл к полю типа file
+    await client.comment_task(task_id, field_updates=[
+        {"id": 686, "value": [{"guid": uploaded.guid}]},
+    ])
+
+    # Печатные формы (PDF)
+    pdf = await client.download_print_form(task_id=12345678, print_form_id=1)
+
     # Объявления
     announcements = await client.get_announcements()
 ```
+
+## Батч-операции
+
+Параллельное выполнение через `asyncio.gather`:
+
+```python
+async with UserClient(login=LOGIN, security_key=KEY) as client:
+    # Получить несколько задач параллельно (ошибки пропускаются)
+    tasks = await client.get_tasks([1001, 1002, 1003])
+
+    # Создать несколько задач (типизированные модели)
+    from aiopyrus import NewTask, NewRole, MemberUpdate
+    results = await client.create_tasks([
+        NewTask(form_id=321, fields=[{"id": 1, "value": "A"}]),
+        NewTask(text="Простая задача"),
+    ])
+
+    # Прокомментировать несколько задач через TaskContext
+    ctxs = await client.task_contexts([1001, 1002])
+    ctxs[0].set("Статус", "Выполнена")
+    ctxs[1].set("Статус", "Отклонена")
+    await asyncio.gather(
+        ctxs[0].approve("Одобрено"),
+        ctxs[1].reject("Отклонено"),
+    )
+
+    # Батч-операции с ролями и участниками
+    await client.create_roles([NewRole(name="Admins", member_ids=[1, 2]), NewRole(name="Users")])
+    await client.update_members([MemberUpdate(member_id=100, position="Lead"), MemberUpdate(member_id=200, position="Dev")])
+```
+
+## Утилиты
+
+### FieldUpdate — конструктор обновлений полей
+
+```python
+from aiopyrus import FieldUpdate
+
+# Ручные фабрики
+updates = [
+    FieldUpdate.text(field_id=1, value="Москва"),
+    FieldUpdate.choice(field_id=2, choice_id=3),
+    FieldUpdate.person(field_id=3, person_id=100500),
+    FieldUpdate.checkmark(field_id=4, checked=True),
+    FieldUpdate.catalog(field_id=5, item_id=42),
+]
+
+# Автоопределение формата по типу поля
+task = await client.get_task(12345678)
+updates = [
+    FieldUpdate.from_field(task.get_field("Статус"), 3),            # choice_id
+    FieldUpdate.from_field(task.get_field("Исполнитель"), 100500),   # person_id
+    FieldUpdate.from_field(task.get_field("Описание"), "Текст"),     # text
+]
+await client.comment_task(task.id, field_updates=updates)
+```
+
+### Прочие утилиты
+
+```python
+from aiopyrus import get_flat_fields, format_mention, select_fields
+
+# Рекурсивный flatten вложенных полей (title-секции, таблицы)
+flat = get_flat_fields(task.fields)
+
+# HTML @упоминание для formatted_text
+html = format_mention(100500, header="Данил Колбасенко")
+await client.comment_task(task_id, formatted_text=html)
+
+# Выборка полей из списка моделей
+tasks = await client.get_register(321)
+slim = select_fields(tasks, {"id", "current_step", "fields"})
+```
+
+## Тестирование
+
+```python
+from aiopyrus import create_mock_client
+from aiopyrus.types import Task
+
+# AsyncMock с spec=UserClient
+mock = create_mock_client(
+    get_task=Task(id=12345678, text="Test"),
+    get_members=[],
+)
+
+task = await mock.get_task(12345678)
+assert task.id == 12345678
+mock.get_task.assert_awaited_once_with(12345678)
+
+# Поддержка async context manager
+async with mock as client:
+    await client.get_inbox()
+```
+
+## Управление этапами согласования
+
+```python
+# Пересогласование (вернуть шаг в «ожидание»)
+await client.comment_task(task_id, approvals_rerequested=[[141636]])
+
+# Добавить согласующего на этап
+await client.comment_task(task_id, approvals_added=[[{"id": 141636}]])
+
+# Убрать согласующего с этапа
+await client.comment_task(task_id, approvals_removed=[{"id": 141636}])
+```
+
+Боты Pyrus комбинируют `approvals_removed` + `approvals_added` для переключения задачи между этапами.
 
 ## Rate limiting
 
@@ -265,7 +397,7 @@ client = UserClient(
 
 ## Примеры
 
-В папке [`examples/`](examples/) — 8 файлов от простого к сложному:
+В папке [`examples/`](examples/) — 12 файлов от простого к сложному:
 
 | Файл | Тема |
 |---|---|
@@ -277,6 +409,10 @@ client = UserClient(
 | [`06_approval_bot.py`](examples/06_approval_bot.py) | Бот-наблюдатель за согласованиями, `enrich`, inbox polling |
 | [`07_middleware_errors.py`](examples/07_middleware_errors.py) | Middleware, обработка ошибок, вложенные роутеры |
 | [`08_inbox_vs_register.py`](examples/08_inbox_vs_register.py) | Inbox vs Register: что выбрать, мульти-форм polling |
+| [`09_auto_processing.py`](examples/09_auto_processing.py) | UserClient: обработка задачи по ссылке |
+| [`10_polling_auto_approve.py`](examples/10_polling_auto_approve.py) | Polling + FormFilter + StepFilter + ApprovalPendingFilter |
+| [`11_http_integration.py`](examples/11_http_integration.py) | HTTP-сервер для внешних систем (PHP, 1C и др.) |
+| [`12_embed_in_project.py`](examples/12_embed_in_project.py) | Встраивание aiopyrus в FastAPI / Django / Celery |
 
 ## FAQ
 

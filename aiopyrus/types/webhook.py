@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from .base import PyrusModel
 from .task import Task
 
@@ -35,18 +37,18 @@ class BotResponse(PyrusModel):
     text: str | None = None
     action: str | None = None  # "finished" | "reopened"
     approval_choice: str | None = None  # "approved" | "rejected" | ...
-    field_updates: list[dict] | None = None
-    reassign_to: dict | None = None
-    approvals_added: list[list[dict]] | None = None
-    approvals_removed: list[dict] | None = None
-    participants_added: list[dict] | None = None
-    participants_removed: list[dict] | None = None
+    field_updates: list[dict[str, Any]] | None = None
+    reassign_to: dict[str, Any] | None = None
+    approvals_added: list[list[dict[str, Any]]] | None = None
+    approvals_removed: list[dict[str, Any]] | None = None
+    participants_added: list[dict[str, Any]] | None = None
+    participants_removed: list[dict[str, Any]] | None = None
     due_date: str | None = None
     cancel_due: bool | None = None
     scheduled_date: str | None = None
     spent_minutes: int | None = None
     attachments: list[str] | None = None  # list of GUIDs
 
-    def model_dump_clean(self) -> dict:
+    def model_dump_clean(self) -> dict[str, Any]:
         """Dump only set (non-None) fields for the response body."""
         return self.model_dump(exclude_none=True)

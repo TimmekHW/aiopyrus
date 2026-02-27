@@ -95,6 +95,7 @@ Python 3.10+
 | `ctx.discard()` | Cancel pending `set()` calls |
 | `ctx.pending_count()` | Number of pending `set()` calls |
 | `await ctx.answer("text")` | Comment + flush all `set()` calls |
+| `await ctx.answer("text", private=True)` | Private comment |
 | `await ctx.approve("text")` | Approve an approval step |
 | `await ctx.reject("text")` | Reject an approval step |
 | `await ctx.finish("text")` | Finish (close) the task |
@@ -184,8 +185,15 @@ async with UserClient(login=LOGIN, security_key=KEY) as client:
     # Register with filters
     tasks = await client.get_register(321, steps=[1, 2], due_filter="overdue")
 
+    # CSV export
+    csv_text = await client.get_register_csv(321, steps=[1, 2])
+
     # Parallel search across multiple forms
     all_tasks = await client.search_tasks({321: [1, 2], 322: None})
+
+    # Task lists (projects / kanban boards)
+    lists = await client.get_lists()
+    list_tasks = await client.get_task_list(lists[0].id)
 
     # Catalogs
     catalogs = await client.get_catalogs()
@@ -196,6 +204,10 @@ async with UserClient(login=LOGIN, security_key=KEY) as client:
     person = await client.find_member("John Smith")
     members = await client.get_members()
 
+    # Avatar
+    uploaded = await client.upload_file("photo.jpg")
+    await client.set_avatar(person.id, uploaded.guid)
+
     # Roles
     roles = await client.get_roles()
 
@@ -203,9 +215,129 @@ async with UserClient(login=LOGIN, security_key=KEY) as client:
     uploaded = await client.upload_file("/path/to/file.pdf")
     content = await client.download_file("guid")
 
+    # Attach file to a comment
+    await client.comment_task(task_id, text="Document", attachments=[uploaded.guid])
+
+    # Attach file to a file-type field
+    await client.comment_task(task_id, field_updates=[
+        {"id": 686, "value": [{"guid": uploaded.guid}]},
+    ])
+
+    # Print forms (PDF)
+    pdf = await client.download_print_form(task_id=12345678, print_form_id=1)
+
     # Announcements
     announcements = await client.get_announcements()
 ```
+
+## Batch Operations
+
+Parallel execution via `asyncio.gather`:
+
+```python
+async with UserClient(login=LOGIN, security_key=KEY) as client:
+    # Fetch multiple tasks in parallel (errors are skipped)
+    tasks = await client.get_tasks([1001, 1002, 1003])
+
+    # Create multiple tasks (typed models)
+    from aiopyrus import NewTask, NewRole, MemberUpdate
+    results = await client.create_tasks([
+        NewTask(form_id=321, fields=[{"id": 1, "value": "A"}]),
+        NewTask(text="Simple task"),
+    ])
+
+    # Comment on multiple tasks via TaskContext
+    ctxs = await client.task_contexts([1001, 1002])
+    ctxs[0].set("Status", "Done")
+    ctxs[1].set("Status", "Rejected")
+    await asyncio.gather(
+        ctxs[0].approve("Approved"),
+        ctxs[1].reject("Rejected"),
+    )
+
+    # Batch role and member operations
+    await client.create_roles([NewRole(name="Admins", member_ids=[1, 2]), NewRole(name="Users")])
+    await client.update_members([MemberUpdate(member_id=100, position="Lead"), MemberUpdate(member_id=200, position="Dev")])
+```
+
+## Utilities
+
+### FieldUpdate — field update builder
+
+```python
+from aiopyrus import FieldUpdate
+
+# Manual factories
+updates = [
+    FieldUpdate.text(field_id=1, value="Moscow"),
+    FieldUpdate.choice(field_id=2, choice_id=3),
+    FieldUpdate.person(field_id=3, person_id=100500),
+    FieldUpdate.checkmark(field_id=4, checked=True),
+    FieldUpdate.catalog(field_id=5, item_id=42),
+]
+
+# Auto-detect format by field type
+task = await client.get_task(12345678)
+updates = [
+    FieldUpdate.from_field(task.get_field("Status"), 3),          # choice_id
+    FieldUpdate.from_field(task.get_field("Assignee"), 100500),    # person_id
+    FieldUpdate.from_field(task.get_field("Description"), "Text"), # text
+]
+await client.comment_task(task.id, field_updates=updates)
+```
+
+### Other utilities
+
+```python
+from aiopyrus import get_flat_fields, format_mention, select_fields
+
+# Recursive flatten of nested fields (title sections, tables)
+flat = get_flat_fields(task.fields)
+
+# HTML @mention for formatted_text fields
+html = format_mention(100500, header="John Smith")
+await client.comment_task(task_id, formatted_text=html)
+
+# Client-side field projection from Pydantic models
+tasks = await client.get_register(321)
+slim = select_fields(tasks, {"id", "current_step", "fields"})
+```
+
+## Testing
+
+```python
+from aiopyrus import create_mock_client
+from aiopyrus.types import Task
+
+# AsyncMock with spec=UserClient
+mock = create_mock_client(
+    get_task=Task(id=12345678, text="Test"),
+    get_members=[],
+)
+
+task = await mock.get_task(12345678)
+assert task.id == 12345678
+mock.get_task.assert_awaited_once_with(12345678)
+
+# Async context manager support
+async with mock as client:
+    await client.get_inbox()
+```
+
+## Approval Step Management
+
+```python
+# Re-request approval (reset step to "waiting")
+await client.comment_task(task_id, approvals_rerequested=[[141636]])
+
+# Add approver to a step
+await client.comment_task(task_id, approvals_added=[[{"id": 141636}]])
+
+# Remove approver from a step
+await client.comment_task(task_id, approvals_removed=[{"id": 141636}])
+```
+
+Pyrus bots combine `approvals_removed` + `approvals_added` to switch tasks between workflow steps.
 
 ## Rate Limiting
 
@@ -243,7 +375,7 @@ client = UserClient(
 
 ## Examples
 
-See [`examples/`](examples/) — 7 files from simple to advanced:
+See [`examples/`](examples/) — 12 files from simple to advanced:
 
 | File | Topic |
 |---|---|
@@ -254,6 +386,11 @@ See [`examples/`](examples/) — 7 files from simple to advanced:
 | [`05_data_management.py`](examples/05_data_management.py) | Registers, catalogs, members, roles, files |
 | [`06_approval_bot.py`](examples/06_approval_bot.py) | Approval monitoring bot, `enrich`, inbox polling |
 | [`07_middleware_errors.py`](examples/07_middleware_errors.py) | Middleware, error handling, nested routers |
+| [`08_inbox_vs_register.py`](examples/08_inbox_vs_register.py) | Inbox vs Register: choosing the right approach |
+| [`09_auto_processing.py`](examples/09_auto_processing.py) | UserClient: task processing by link |
+| [`10_polling_auto_approve.py`](examples/10_polling_auto_approve.py) | Polling + FormFilter + StepFilter + ApprovalPendingFilter |
+| [`11_http_integration.py`](examples/11_http_integration.py) | HTTP server for external systems (PHP, 1C, etc.) |
+| [`12_embed_in_project.py`](examples/12_embed_in_project.py) | Embedding aiopyrus into FastAPI / Django / Celery |
 
 ## FAQ
 

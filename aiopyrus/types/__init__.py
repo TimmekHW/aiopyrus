@@ -13,6 +13,7 @@ from .form import (
     TableRow,
     TitleValue,
 )
+from .params import MemberUpdate, NewRole, NewTask, PersonRef, PrintFormItem, RoleUpdate
 from .task import (
     Announcement,
     AnnouncementComment,
@@ -28,7 +29,9 @@ from .task import (
     SubscriberEntry,
     Task,
     TaskAction,
+    TaskList,
     TaskResponse,
+    TaskStep,
 )
 from .user import ContactsResponse, Organization, Person, PersonType, Profile, Role
 from .webhook import BotResponse, WebhookPayload
@@ -68,6 +71,9 @@ __all__ = [
     "CommentChannel",
     "InboxResponse",
     "RegisterResponse",
+    # Task lists
+    "TaskList",
+    "TaskStep",
     # Announcements
     "Announcement",
     "AnnouncementComment",
@@ -82,4 +88,11 @@ __all__ = [
     # Webhook / bot
     "WebhookPayload",
     "BotResponse",
+    # Request params & type aliases
+    "PersonRef",
+    "NewTask",
+    "NewRole",
+    "RoleUpdate",
+    "MemberUpdate",
+    "PrintFormItem",
 ]

@@ -246,6 +246,8 @@ class Form(PyrusModel):
     # Система где folder то dict, то string, то хуй знает.
     # cloud: list[FormFolder] ({id, name}), corp: list[str].
     folder: list[Any] | None = None
+    # Person IDs of the form business owners
+    business_owners: list[int] = []
 
     def get_field(self, field_id: int) -> FormField | None:
         """Найти поле по id — включая вложенные в title секции через info['fields']."""

@@ -31,3 +31,6 @@ htmlcov/
 # Secrets / local config
 .env
 test_live.py
+test_live_remote.py
+_*.py
+_*.txt

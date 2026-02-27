@@ -192,6 +192,17 @@ class Comment(PyrusModel):
         return self.action == TaskAction.finished
 
 
+class TaskStep(PyrusModel):
+    """Workflow step progress embedded in a task response.
+
+    Шаг маршрута внутри ответа по задаче — имя этапа + затраченное время.
+    """
+
+    step: int
+    name: str = ""
+    elapsed_time: int | None = None  # milliseconds spent on this step
+
+
 class Task(PyrusModel):
     """A Pyrus task — either a free task or a form task.
 
@@ -251,7 +262,9 @@ class Task(PyrusModel):
     # Corporate Pyrus instances return is_closed instead of / alongside close_date
     is_closed: bool | None = None
     # Workflow step definitions embedded in the task (corp instances return a list)
-    steps: list[dict] | None = None
+    steps: list[TaskStep] | None = None
+    # Last comment id (present in register responses)
+    last_note_id: int | None = None
 
     # ---- Convenience properties ----
 
@@ -384,6 +397,7 @@ class TaskResponse(PyrusModel):
 class InboxResponse(PyrusModel):
     tasks: list[Task] = []
     has_more: bool | None = None
+    task_groups: list[Any] | None = None
 
 
 class RegisterResponse(PyrusModel):
@@ -398,6 +412,26 @@ class AnnouncementComment(PyrusModel):
     create_date: datetime | None = None
     author: Person | None = None
     attachments: list[Attachment] | None = None
+
+
+class TaskList(PyrusModel):
+    """A Pyrus task list (project / kanban board).
+
+    Список задач Pyrus (проект / канбан-доска).
+    """
+
+    id: int
+    name: str = ""
+    children: list[TaskList] = []
+    color: str | None = None
+    has_form: bool | None = None
+    list_type: str | None = None  # "private" | "public" | ...
+    version: int | None = None
+    external_id: int | None = None
+    manager_ids: list[int] = []
+
+
+TaskList.model_rebuild()
 
 
 class Announcement(PyrusModel):

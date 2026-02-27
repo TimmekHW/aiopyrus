@@ -130,7 +130,7 @@ class TestCommentTask:
         await client.auth()
         await client.comment_task(42, attachments=["guid1", "guid2"])
         body = json.loads(respx.calls.last.request.content)
-        assert body["attachments"] == [{"id": "guid1"}, {"id": "guid2"}]
+        assert body["attachments"] == [{"guid": "guid1"}, {"guid": "guid2"}]
         await client.close()
 
     @respx.mock

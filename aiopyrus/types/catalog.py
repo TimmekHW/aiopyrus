@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from .base import PyrusModel
 
 
@@ -23,6 +25,9 @@ class Catalog(PyrusModel):
     deleted: bool | None = None
     catalog_headers: list[CatalogHeader] = []
     items: list[CatalogItem] = []
+    source_type: str | None = None  # "department_catalog" | None
+    external_version: int | None = None
+    column_settings: list[dict[str, Any]] | None = None
 
     def find_item(self, key: str) -> CatalogItem | None:
         """Find an item by its first-column value (the key)."""

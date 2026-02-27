@@ -472,6 +472,15 @@ class TaskContext:
     ) -> Task:
         """Reply to a specific comment (threaded comment).
 
+        Создаёт ответ в тред комментария. Pyrus API требует
+        ``<quote data-noteid="...">`` в ``formatted_text`` для создания
+        треда — ``reply_note_id`` в теле запроса является read-only.
+
+        Creates a threaded reply. The Pyrus API requires a
+        ``<quote data-noteid="...">`` tag inside ``formatted_text``
+        to create a thread — ``reply_note_id`` in the request body
+        is read-only and ignored by the server.
+
         Args:
             comment_id: ID of the comment to reply to.
             text:       Reply text.
@@ -481,9 +490,33 @@ class TaskContext:
             await ctx.reply(comment.id, "Please clarify the details")
         """
         updates = await self._flush()
+
+        # Build formatted_text with <quote> — the only way Pyrus creates threads.
+        formatted_text = kwargs.pop("formatted_text", None)
+        if formatted_text is None:
+            source = None
+            for c in self._task.comments or []:
+                if c.id == comment_id:
+                    source = c
+                    break
+            if source is not None:
+                person_id = source.author.id if source.author else 0
+                person_name = source.author.full_name if source.author else ""
+                quoted = source.text or source.formatted_text or ""
+                formatted_text = (
+                    f'<quote data-noteid="{comment_id}" '
+                    f'data-personid="{person_id}" '
+                    f'data-personname="{person_name}">'
+                    f"{quoted}</quote>"
+                    f"{text or ''}"
+                )
+            else:
+                # Comment not found in loaded task — minimal quote tag.
+                formatted_text = f'<quote data-noteid="{comment_id}"></quote>{text or ""}'
+
         result = await self._client.comment_task(
             self._task.id,
-            text=text,
+            formatted_text=formatted_text,
             field_updates=updates or None,
             reply_to_comment_id=comment_id,
             **kwargs,
