@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -507,6 +508,105 @@ class TestFinishWithUpdates:
         assert client.comment_task.call_count == 2
         second = client.comment_task.call_args_list[1][1]
         assert second["action"] == TaskAction.finished
+
+
+# ── TaskContext._warn_required_missing ────────────────────────
+
+
+class TestWarnRequiredMissing:
+    async def test_warns_on_empty_required_field(self, caplog):
+        """approve() logs warning when required field is empty."""
+        form = MagicMock()
+        form.fields = [
+            FormField(
+                id=10,
+                name="Case Number",
+                type=FieldType.text,
+                info={"required_step": 1},
+            )
+        ]
+        # Task has no value for field 10 → should warn
+        task_after = make_task(id=42, form_id=321, current_step=2, is_closed=True)
+        client = AsyncMock()
+        client.get_form = AsyncMock(return_value=form)
+        client.comment_task = AsyncMock(return_value=task_after)
+
+        ctx = TaskContext(make_task(id=42, form_id=321, current_step=1), client)
+        with caplog.at_level(logging.WARNING, logger="aiopyrus.context"):
+            await ctx.approve("Go")
+
+        assert "Case Number" in caplog.text
+        assert "required fields not filled" in caplog.text
+
+    async def test_no_warning_when_field_filled(self, caplog):
+        """approve() does NOT warn when required field has a value."""
+        form = MagicMock()
+        form.fields = [
+            FormField(
+                id=10,
+                name="Case Number",
+                type=FieldType.text,
+                info={"required_step": 1},
+            )
+        ]
+        field = make_field(id=10, name="Case Number", type="text", value="INC-001")
+        task_after = make_task(id=42, form_id=321, current_step=2, fields=[field], is_closed=True)
+        client = AsyncMock()
+        client.get_form = AsyncMock(return_value=form)
+        client.comment_task = AsyncMock(return_value=task_after)
+
+        ctx = TaskContext(make_task(id=42, form_id=321, current_step=1, fields=[field]), client)
+        with caplog.at_level(logging.WARNING, logger="aiopyrus.context"):
+            await ctx.approve("Go")
+
+        assert "required fields not filled" not in caplog.text
+
+    async def test_pending_set_counts_as_filled(self, caplog):
+        """Pending set() should count as filled — no warning."""
+        form = MagicMock()
+        form.fields = [
+            FormField(
+                id=10,
+                name="Case Number",
+                type=FieldType.text,
+                info={"required_step": 1},
+            )
+        ]
+        field = make_field(id=10, name="Case Number", type="text", value=None)
+        task_after = make_task(id=42, form_id=321, current_step=2, is_closed=True)
+        client = AsyncMock()
+        client.get_form = AsyncMock(return_value=form)
+        client.comment_task = AsyncMock(return_value=task_after)
+
+        ctx = TaskContext(make_task(id=42, form_id=321, current_step=1, fields=[field]), client)
+        ctx.set("Case Number", "INC-001")
+        with caplog.at_level(logging.WARNING, logger="aiopyrus.context"):
+            await ctx.approve("Go")
+
+        assert "required fields not filled" not in caplog.text
+
+    async def test_no_crash_when_form_unavailable(self, caplog):
+        """If get_form() fails, warn is silently skipped."""
+        task_after = make_task(id=42, form_id=321, current_step=2, is_closed=True)
+        client = AsyncMock()
+        client.get_form = AsyncMock(side_effect=RuntimeError("network"))
+        client.comment_task = AsyncMock(return_value=task_after)
+
+        ctx = TaskContext(make_task(id=42, form_id=321, current_step=1), client)
+        with caplog.at_level(logging.WARNING, logger="aiopyrus.context"):
+            await ctx.approve("Go")  # should not raise
+
+    async def test_no_crash_when_no_form_id(self, caplog):
+        """If task has no form_id, skip validation silently."""
+        task_after = make_task(id=42, form_id=None, current_step=2, is_closed=True)
+        client = AsyncMock()
+        client.comment_task = AsyncMock(return_value=task_after)
+
+        ctx = TaskContext(make_task(id=42, form_id=None, current_step=1), client)
+        with caplog.at_level(logging.WARNING, logger="aiopyrus.context"):
+            await ctx.approve("Go")  # should not raise, should not call get_form
+
+        client.get_form.assert_not_called()
 
 
 # ── TaskContext.find edge cases ───────────────────────────────

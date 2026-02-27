@@ -91,6 +91,7 @@ class UserClient:
         return await self._session.auth()
 
     async def close(self) -> None:
+        """Close the underlying HTTP session."""
         await self._session.close()
 
     async def __aenter__(self) -> UserClient:
@@ -104,6 +105,7 @@ class UserClient:
     # ------------------------------------------------------------------
 
     async def get_profile(self) -> Profile:
+        """GET /profile — current user profile."""
         data = await self._session.get("profile")
         return Profile.model_validate(data)
 
@@ -607,6 +609,126 @@ class UserClient:
             "GET", f"forms/{form_id}/register", params=params
         )
         return response.text
+
+    # ------------------------------------------------------------------
+    # Event log (on-premise only)
+    # ------------------------------------------------------------------
+
+    async def get_event_history(
+        self,
+        *,
+        after: int | None = None,
+        count: int | None = None,
+    ) -> str:
+        """GET /eventhistory — журнал событий безопасности (CSV, on-premise).
+
+        Security event log: logins, password changes, role modifications,
+        file operations, and more (113 event types).
+        Available only on Pyrus server (on-premise) instances.
+
+        Args:
+            after: Вернуть события с ID >= этого значения.
+            count: Количество событий (макс. 100 000).
+        """
+        params: dict[str, Any] = {}
+        if after is not None:
+            params["after"] = after
+        if count is not None:
+            params["count"] = count
+        resp = await self._session.request_raw("GET", "eventhistory", params=params)
+        return resp.text
+
+    async def get_file_access_history(
+        self,
+        *,
+        after: int | None = None,
+        count: int | None = None,
+    ) -> str:
+        """GET /fileaccesshistory — история доступа к файлам (CSV, on-premise).
+
+        File upload/download activity log.
+        Available only on Pyrus server (on-premise) instances.
+
+        Args:
+            after: Вернуть события с ID >= этого значения.
+            count: Количество событий (макс. 100 000).
+        """
+        params: dict[str, Any] = {}
+        if after is not None:
+            params["after"] = after
+        if count is not None:
+            params["count"] = count
+        resp = await self._session.request_raw("GET", "fileaccesshistory", params=params)
+        return resp.text
+
+    async def get_task_access_history(
+        self,
+        *,
+        after: int | None = None,
+        count: int | None = None,
+    ) -> str:
+        """GET /taskaccesshistory — история доступа к задачам (CSV, on-premise).
+
+        Task access monitoring log.
+        Available only on Pyrus server (on-premise) instances.
+
+        Args:
+            after: Вернуть события с ID >= этого значения.
+            count: Количество событий (макс. 100 000).
+        """
+        params: dict[str, Any] = {}
+        if after is not None:
+            params["after"] = after
+        if count is not None:
+            params["count"] = count
+        resp = await self._session.request_raw("GET", "taskaccesshistory", params=params)
+        return resp.text
+
+    async def get_task_export_history(
+        self,
+        *,
+        after: int | None = None,
+        count: int | None = None,
+    ) -> str:
+        """GET /taskexporthistory — история экспорта задач (CSV, on-premise).
+
+        Task export activity log.
+        Available only on Pyrus server (on-premise) instances.
+
+        Args:
+            after: Вернуть события с ID >= этого значения.
+            count: Количество событий (макс. 100 000).
+        """
+        params: dict[str, Any] = {}
+        if after is not None:
+            params["after"] = after
+        if count is not None:
+            params["count"] = count
+        resp = await self._session.request_raw("GET", "taskexporthistory", params=params)
+        return resp.text
+
+    async def get_registry_download_history(
+        self,
+        *,
+        after: int | None = None,
+        count: int | None = None,
+    ) -> str:
+        """GET /registrydownloadhistory — история скачивания реестров (CSV, on-premise).
+
+        Form registry download activity log.
+        Available only on Pyrus server (on-premise) instances.
+
+        Args:
+            after: Вернуть события с ID >= этого значения.
+            count: Количество событий (макс. 100 000).
+        """
+        params: dict[str, Any] = {}
+        if after is not None:
+            params["after"] = after
+        if count is not None:
+            params["count"] = count
+        resp = await self._session.request_raw("GET", "registrydownloadhistory", params=params)
+        return resp.text
 
     async def search_tasks(
         self,

@@ -361,6 +361,25 @@ await client.comment_task(task_id, approvals_removed=[{"id": 141636}])
 
 Боты Pyrus комбинируют `approvals_removed` + `approvals_added` для переключения задачи между этапами.
 
+## Журнал событий (on-premise)
+
+Аудит-эндпоинты доступны только в серверной версии Pyrus. Все возвращают CSV.
+
+```python
+# Журнал безопасности (логины, пароли, роли — 113 типов событий)
+csv = await client.get_event_history(after=1000, count=500)
+
+# История доступа к файлам
+csv = await client.get_file_access_history(count=1000)
+
+# Доступ к задачам / экспорт задач / скачивание реестров
+csv = await client.get_task_access_history()
+csv = await client.get_task_export_history()
+csv = await client.get_registry_download_history()
+```
+
+Подробнее: https://pyrus.com/ru/help/api/event-log
+
 ## Rate limiting
 
 ```python

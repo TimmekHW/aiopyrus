@@ -97,6 +97,7 @@ from __future__ import annotations
 
 import contextlib
 import fnmatch
+import logging
 from typing import TYPE_CHECKING, Any
 
 from aiopyrus.types.task import ApprovalChoice, Task, TaskAction
@@ -105,6 +106,8 @@ from aiopyrus.utils.fields import FieldUpdate
 if TYPE_CHECKING:
     from aiopyrus.types.form import FormField
     from aiopyrus.user.client import UserClient
+
+log = logging.getLogger("aiopyrus.context")
 
 
 # ---------------------------------------------------------------------------
@@ -133,7 +136,7 @@ def _collect_required_missing(
     for field_def in form_fields:
         info = field_def.info if isinstance(field_def.info, dict) else {}
 
-        required_step = info.get("required_step")
+        required_step = getattr(field_def, "required_step", None) or info.get("required_step")
         if required_step == step and field_def.id not in task_values:
             result.append(field_def.name or f"id={field_def.id}")
 
@@ -532,6 +535,7 @@ class TaskContext:
             are present in the same request. Pending ``set()``-s are therefore
             flushed in a separate API call *before* casting the approval vote.
         """
+        await self._warn_required_missing("approve")
         updates = await self._flush()
         if updates:
             self._task = await self._client.comment_task(self._task.id, field_updates=updates)
@@ -549,6 +553,7 @@ class TaskContext:
 
     async def reject(self, text: str | None = None, **kwargs: Any) -> Task:
         """Reject the current approval step and flush pending ``set()``-s."""
+        await self._warn_required_missing("reject")
         updates = await self._flush()
         if updates:
             self._task = await self._client.comment_task(self._task.id, field_updates=updates)
@@ -563,6 +568,7 @@ class TaskContext:
 
     async def finish(self, text: str | None = None, **kwargs: Any) -> Task:
         """Finish (close) the task and flush pending ``set()``-s."""
+        await self._warn_required_missing("finish")
         updates = await self._flush()
         if updates:
             self._task = await self._client.comment_task(self._task.id, field_updates=updates)
@@ -621,6 +627,39 @@ class TaskContext:
     # ------------------------------------------------------------------
     # Internal resolution
     # ------------------------------------------------------------------
+
+    async def _warn_required_missing(self, action: str) -> None:
+        """Pre-check: warn if required fields for the current step are empty.
+
+        Called before approve/reject/finish to give the user early feedback.
+        Accounts for pending ``set()``-s that haven't been flushed yet.
+
+        Pre-check: предупреждение если обязательные поля текущего этапа
+        не заполнены. Учитывает ещё не отправленные ``set()``-ы.
+        """
+        form_id = self._task.form_id
+        step = self._task.current_step
+        if not form_id or step is None:
+            return
+        try:
+            form = await self._client.get_form(form_id)
+            task_values: dict[int, Any] = {}
+            _collect_task_values(self._task.fields, task_values)
+            # Account for pending set()-s not yet flushed.
+            for field, value in self._pending:
+                task_values[field.id] = value
+            missing: list[str] = []
+            _collect_required_missing(form.fields, task_values, step, missing)
+            if missing:
+                names = ", ".join(missing)
+                log.warning(
+                    "%s(): required fields not filled for step %d: %s",
+                    action,
+                    step,
+                    names,
+                )
+        except Exception:  # noqa: BLE001
+            pass  # Don't block if form is unavailable.
 
     async def _raise_if_blocked(self, action: str) -> None:
         """Pyrus accepted the request (200 OK) but the step did not advance.

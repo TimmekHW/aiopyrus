@@ -181,6 +181,69 @@ class TestCSVExport:
         await client.close()
 
 
+# -- Event log (on-premise) --
+
+
+class TestEventLog:
+    @respx.mock
+    async def test_get_event_history(self, client):
+        _mock_auth()
+        csv = "id,type,timestamp,user_id,email,ip,data,user_agent\n1,12,20260228T120000Z,100,u@e,1.2.3.4,{},agent\n"
+        respx.get(url__regex=r".*/eventhistory.*").mock(return_value=httpx.Response(200, text=csv))
+        await client.auth()
+        result = await client.get_event_history(after=1, count=100)
+        assert "id,type,timestamp" in result
+        await client.close()
+
+    @respx.mock
+    async def test_get_file_access_history(self, client):
+        _mock_auth()
+        csv = "id,action,attachment_id,timestamp\n1,U,555,20260228\n"
+        respx.get(url__regex=r".*/fileaccesshistory.*").mock(
+            return_value=httpx.Response(200, text=csv)
+        )
+        await client.auth()
+        result = await client.get_file_access_history(count=50)
+        assert "attachment_id" in result
+        await client.close()
+
+    @respx.mock
+    async def test_get_task_access_history(self, client):
+        _mock_auth()
+        csv = "id,timestamp,ip,user_id,task_id\n1,20260228,1.2.3.4,100,999\n"
+        respx.get(url__regex=r".*/taskaccesshistory.*").mock(
+            return_value=httpx.Response(200, text=csv)
+        )
+        await client.auth()
+        result = await client.get_task_access_history()
+        assert "task_id" in result
+        await client.close()
+
+    @respx.mock
+    async def test_get_task_export_history(self, client):
+        _mock_auth()
+        csv = "id,timestamp,user_id,list_id,source,task_count\n1,20260228,100,5,search,10\n"
+        respx.get(url__regex=r".*/taskexporthistory.*").mock(
+            return_value=httpx.Response(200, text=csv)
+        )
+        await client.auth()
+        result = await client.get_task_export_history(after=0)
+        assert "task_count" in result
+        await client.close()
+
+    @respx.mock
+    async def test_get_registry_download_history(self, client):
+        _mock_auth()
+        csv = "id,form_id,user_id,access_restriction\n1,321,100,0\n"
+        respx.get(url__regex=r".*/registrydownloadhistory.*").mock(
+            return_value=httpx.Response(200, text=csv)
+        )
+        await client.auth()
+        result = await client.get_registry_download_history(after=1, count=500)
+        assert "form_id" in result
+        await client.close()
+
+
 # -- External ID --
 
 

@@ -29,6 +29,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - **`create_mock_client()`** — AsyncMock factory with `spec=UserClient` for testing
 - **`PyrusSession.request_raw()`** — raw `httpx.Response` for non-JSON endpoints (PDF, CSV)
 - `Person.external_id` field for corp/on-premise instances
+- **Event Log (on-premise)**: `get_event_history()`, `get_file_access_history()`,
+  `get_task_access_history()`, `get_task_export_history()`, `get_registry_download_history()` —
+  audit CSV endpoints for Pyrus server instances
 
 ### Fixed
 - **`comment_task()` attachments**: format `{"id": guid}` → `{"guid": guid}` — uploaded files
@@ -37,6 +40,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
   now builds `<quote data-noteid="...">` in `formatted_text` to create proper threaded replies
 - **Typed annotations**: `dict` → `PersonRef`, `dict[str, Any]`, `PrintFormItem` across
   public API (client, bot, webhook, params) for better IDE support
+- **TaskContext pre-validation**: `approve()`, `reject()`, `finish()` now log
+  `logging.warning()` when required fields for the current step are empty — Pyrus API
+  silently accepts such requests but the step will not advance
+- **`_collect_required_missing()`**: fixed `required_step` lookup to check both
+  `FormField.required_step` attribute and `info["required_step"]` dict key
 
 ### Docs
 - File attachment examples (comment + field) in README
