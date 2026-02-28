@@ -52,10 +52,18 @@ POLL_STEP = 2  # Шаг / Step
 router = Router(name="main")
 
 
-# ModifiedAfterFilter() без аргументов = "только задачи, изменённые после старта бота"
-# ModifiedAfterFilter() with no args = "only tasks modified after the bot started"
-# Это дополнительная защита поверх skip_old — полезно при skip_old=False
-# Extra safety on top of skip_old — useful when skip_old=False
+# ВАЖНО: polling отслеживает last_modified_date. Если хендлер изменяет задачу
+# (ctx.set, ctx.answer), она появится в следующем poll как «изменённая» и хендлер
+# сработает повторно. FieldValueFilter(value=None) ниже — защита от этого:
+# после первого прогона поле «Статус» уже не пустое → фильтр отсекает задачу.
+#
+# IMPORTANT: polling tracks last_modified_date. If a handler modifies the task
+# (ctx.set, ctx.answer), the next poll re-dispatches it. FieldValueFilter(value=None)
+# below guards against this: after the first run "Статус" is no longer empty.
+#
+# ModifiedAfterFilter() — дополнительная защита: только задачи, изменённые после
+# старта бота. Полезно при skip_old=False.
+# ModifiedAfterFilter() — extra safety: only tasks modified after bot start.
 @router.task_received(
     FormFilter(FORM_ID),
     StepFilter(POLL_STEP),

@@ -106,6 +106,7 @@ from .exceptions import (
     PyrusAPIError,
     PyrusAuthError,
     PyrusError,
+    PyrusFileSizeError,
     PyrusNotFoundError,
     PyrusPermissionError,
     PyrusRateLimitError,
@@ -232,5 +233,6 @@ __all__ = [
     "PyrusNotFoundError",
     "PyrusPermissionError",
     "PyrusRateLimitError",
+    "PyrusFileSizeError",
     "PyrusWebhookSignatureError",
 ]

@@ -39,3 +39,7 @@ class PyrusWebhookSignatureError(PyrusError):
 
 class PyrusWebhookTimeoutError(PyrusError):
     """Raised when the webhook handler exceeds the 60-second response limit."""
+
+
+class PyrusFileSizeError(PyrusError):
+    """Raised when a file exceeds the maximum upload size (250 MB)."""

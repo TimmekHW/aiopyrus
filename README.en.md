@@ -159,6 +159,25 @@ asyncio.run(
 
 Works behind firewalls, no public URL required.
 
+### Polling: guarding against self-triggering
+
+Polling tracks `last_modified_date` per task. If a handler **modifies** the task (`ctx.set(...)`, `ctx.answer(...)`), `last_modified_date` changes — and the next poll re-dispatches it. This can cause duplicate comments.
+
+Guard with `FieldValueFilter` in the decorator:
+
+```python
+@dp.task_received(
+    FormFilter(321), StepFilter(2),
+    FieldValueFilter(field_name="Status", value="Open"),
+    FieldValueFilter(field_name="Assignee", value=None),
+)
+async def on_new_task(ctx: TaskContext):
+    ctx.set("Status", "In Progress")
+    ctx.set("Assignee", "John Smith")
+    await ctx.approve("Accepted")
+    # After this the status is no longer "Open" — the filter rejects on next poll
+```
+
 ## Filters
 
 ```python
@@ -213,6 +232,10 @@ async with UserClient(login=LOGIN, security_key=KEY) as client:
     async for task in client.stream_register(321, steps=[1, 2]):
         print(task.id, task.current_step)
 
+    # Client-side filtering during streaming (for conditions the server can't filter)
+    async for task in client.stream_register(321, predicate=lambda t: t.text):
+        print(task.id)
+
     # Parallel search across multiple forms
     all_tasks = await client.search_tasks({321: [1, 2], 322: None})
 
@@ -228,6 +251,10 @@ async with UserClient(login=LOGIN, security_key=KEY) as client:
     # Members
     person = await client.find_member("John Smith")
     members = await client.get_members()
+
+    # Find by email
+    person = await client.find_member_by_email("john@corp.com")
+    found = await client.find_members_by_emails(["alice@corp.com", "bob@corp.com"])
 
     # Avatar
     uploaded = await client.upload_file("photo.jpg")
@@ -380,6 +407,31 @@ await client.comment_task(task_id, approvals_removed=[{"id": 141636}])
 ```
 
 Pyrus bots combine `approvals_removed` + `approvals_added` to switch tasks between workflow steps.
+
+## Approval Helpers on Task
+
+The `Task` model provides methods for querying approval steps:
+
+```python
+task = await client.get_task(12345678)
+
+# All approvers on step 1
+entries = task.get_approvals(1)
+
+# Only those who approved
+approved = task.get_approvals(1, choice="approved")
+
+# Waiting approvers
+waiting = task.get_approvals(2, choice=ApprovalChoice.waiting)
+
+# Dict {step_number: [ApprovalEntry, ...]}
+by_step = task.approvals_by_step
+
+# Convenience methods
+names  = task.get_approver_names(1)                    # ["John Smith", "Jane Doe"]
+emails = task.get_approver_emails(1, choice="approved") # ["john@corp.com"]
+ids    = task.get_approver_ids(2)                       # [100500]
+```
 
 ## Event Log (on-premise)
 

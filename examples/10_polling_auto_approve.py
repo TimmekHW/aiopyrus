@@ -2,24 +2,30 @@
                                 Polling + filters + auto-approval.
 
 Сценарий / Scenario:
-  UserClient следит за формой 228, шаг 2, ожидание согласования от person_id=67.
+  Бот следит за формой 228, шаг 2, ожидание согласования от person_id=67.
   Когда задача попадает под фильтры:
     1. Вытаскиваем «Описание» и «ФИО»
-    2. Статус «Открыта» → «В работе», исполнитель «Тестов Тест Тестович»
-    3. Отправляем данные во внешний микросервис
-    4. Получаем ответ
-    5. Статус «В работе» → «Выполнено»
-    6. Списываем 5 минут
-    7. Делаем апрув
+    2. Отправляем данные во внешний микросервис
+    3. Статус «Открыта» → «Выполнено», исполнитель, списываем время, апрув
 
-  UserClient watches form 228, step 2, pending approval from person_id=67.
+  Bot watches form 228, step 2, pending approval from person_id=67.
   When a task matches the filters, it runs the full processing cycle.
+
+ВАЖНО / IMPORTANT:
+  FieldValueFilter(field_name="Статус", value="Открыта") — защита от повторного
+  срабатывания. Polling отслеживает last_modified_date: если хендлер изменяет
+  задачу (ctx.set, ctx.answer), следующий poll вызовет хендлер снова.
+  FieldValueFilter отсекает задачу после первого прогона, т.к. статус уже не «Открыта».
+
+  FieldValueFilter guards against self-triggering. Polling tracks last_modified_date:
+  if a handler modifies the task, the next poll re-dispatches it. The filter
+  rejects the task after the first run because the status is no longer "Открыта".
 """
 
 import asyncio
 import logging
 
-from aiopyrus import Dispatcher, PyrusBot, TaskContext
+from aiopyrus import Dispatcher, FieldValueFilter, PyrusBot, TaskContext
 from aiopyrus.bot.filters import ApprovalPendingFilter, FormFilter, StepFilter
 
 # ── Настройки / Settings ─────────────────────────────────────────────────────
@@ -58,10 +64,11 @@ async def call_external_service(description: str, fio: str) -> dict:
     FormFilter(FORM_ID),
     StepFilter(STEP),
     ApprovalPendingFilter(APPROVER_ID),
+    FieldValueFilter(field_name="Статус", value="Открыта"),  # защита от повторного срабатывания
 )
 async def on_approval_needed(ctx: TaskContext):
-    """Задача на форме 228, шаг 2, ждёт согласования от person 67.
-    Task on form 228, step 2, pending approval from person 67.
+    """Задача на форме 228, шаг 2, ждёт согласования от person 67, статус «Открыта».
+    Task on form 228, step 2, pending approval from person 67, status "Открыта".
     """
     print(f"\n{'=' * 60}")
     print(f"Новая задача: #{ctx.id} | step={ctx.step}")
@@ -69,37 +76,23 @@ async def on_approval_needed(ctx: TaskContext):
     # 1. Вытаскиваем поля / Extract fields
     description = ctx.get("Описание", "нет описания")
     fio = ctx.get("ФИО", "не указано")
-    print(f"Описание: {description}")
-    print(f"ФИО: {fio}")
+    print(f"  Описание: {description}")
+    print(f"  ФИО: {fio}")
 
-    # 2. Статус → «В работе», исполнитель
+    # 2. Внешний сервис / External service
+    result = await call_external_service(str(description), str(fio))
+    print(f"  -> Ответ микросервиса: {result}")
+
+    # 3. Статус → «В работе», исполнитель, комментарий (1 API-вызов)
     ctx.set("Статус", "В работе")
     ctx.set("Исполнитель", "Тестов Тест Тестович")
-    await ctx.answer("Задача принята в работу автоматически")
-    print("-> Статус: В работе")
-
-    # 3. Внешний сервис / External service
-    result = await call_external_service(str(description), str(fio))
-    print(f"-> Ответ микросервиса: {result}")
-
-    # 4. Статус → «Выполнено»
-    ctx.set("Статус", "Выполнено")
     await ctx.answer(f"Обработано. Тикет: {result.get('ticket', 'N/A')}")
-    print("-> Статус: Выполнено")
+    print("  -> Статус: В работе")
 
-    # 5. Списываем 5 минут / Log 5 minutes
-    await ctx.log_time(5, "Автоматическая обработка")
-    print("-> Списано 5 минут")
-
-    # 6. Апрув / Approve
-    await ctx.approve("Согласовано автоматически")
-    print("-> Задача согласована")
-
-
-@dp.task_received()
-async def on_other(ctx: TaskContext):
-    """Все остальные задачи — пропускаем."""
-    pass
+    # 4. Статус → «Выполнено», списание времени, апрув (1 API-вызов)
+    ctx.set("Статус", "Выполнено")
+    await ctx.approve("Согласовано автоматически", duration=5)
+    print("  -> Согласовано, списано 5 минут")
 
 
 # ── Запуск / Start ───────────────────────────────────────────────────────────

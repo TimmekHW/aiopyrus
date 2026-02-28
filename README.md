@@ -159,6 +159,25 @@ asyncio.run(
 
 Работает за файрволом, не требует публичный URL.
 
+### Polling: защита от повторного срабатывания
+
+Polling отслеживает `last_modified_date` каждой задачи. Если хендлер **изменяет** задачу (`ctx.set(...)`, `ctx.answer(...)`), её `last_modified_date` обновится — и следующий poll вызовет хендлер снова. Это может привести к дублированию комментариев.
+
+Защита — `FieldValueFilter` в декораторе:
+
+```python
+@dp.task_received(
+    FormFilter(321), StepFilter(2),
+    FieldValueFilter(field_name="Статус", value="Открыта"),
+    FieldValueFilter(field_name="Исполнитель", value=None),
+)
+async def on_new_task(ctx: TaskContext):
+    ctx.set("Статус", "В работе")
+    ctx.set("Исполнитель", "Данил Колбасенко")
+    await ctx.approve("Принято")
+    # После этого статус уже не "Открыта" → фильтр отсечёт при повторном poll
+```
+
 ## Фильтры
 
 ```python
@@ -235,6 +254,10 @@ async with UserClient(login=LOGIN, security_key=KEY) as client:
     async for task in client.stream_register(321, steps=[1, 2]):
         print(task.id, task.current_step)
 
+    # Фильтрация при стриминге (клиентская, для условий которые сервер не умеет)
+    async for task in client.stream_register(321, predicate=lambda t: t.text):
+        print(task.id)
+
     # Параллельный поиск по нескольким формам
     all_tasks = await client.search_tasks({321: [1, 2], 322: None})
 
@@ -250,6 +273,10 @@ async with UserClient(login=LOGIN, security_key=KEY) as client:
     # Участники
     person = await client.find_member("Данил Колбасенко")
     members = await client.get_members()
+
+    # Поиск по email
+    person = await client.find_member_by_email("kolbasenko@corp.ru")
+    found = await client.find_members_by_emails(["alice@corp.ru", "bob@corp.ru"])
 
     # Аватар
     uploaded = await client.upload_file("photo.jpg")
@@ -402,6 +429,31 @@ await client.comment_task(task_id, approvals_removed=[{"id": 141636}])
 ```
 
 Боты Pyrus комбинируют `approvals_removed` + `approvals_added` для переключения задачи между этапами.
+
+## Хелперы согласования на Task
+
+Модель `Task` предоставляет методы для работы с этапами согласования:
+
+```python
+task = await client.get_task(12345678)
+
+# Все согласующие на этапе 1
+entries = task.get_approvals(1)
+
+# Только утвердившие
+approved = task.get_approvals(1, choice="approved")
+
+# Ожидающие
+waiting = task.get_approvals(2, choice=ApprovalChoice.waiting)
+
+# Словарь {номер_этапа: [ApprovalEntry, ...]}
+by_step = task.approvals_by_step
+
+# Удобные методы
+names  = task.get_approver_names(1)                    # ["Данил Колбасенко", "Иван Иванов"]
+emails = task.get_approver_emails(1, choice="approved") # ["kolbasenko@corp.ru"]
+ids    = task.get_approver_ids(2)                       # [100500]
+```
 
 ## Журнал событий (on-premise)
 

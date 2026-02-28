@@ -5,6 +5,24 @@ All notable changes to **aiopyrus** will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
+## [0.4.0] — 2026-02-28
+
+### Added
+- **Approval helpers on Task model**: `get_approvals(step, choice=)`,
+  `approvals_by_step` property, `get_approver_names()`, `get_approver_emails()`,
+  `get_approver_ids()` — query approval steps by status without manual indexing
+- **`find_member_by_email(email)`**: exact case-insensitive email lookup,
+  returns `Person | None`
+- **`find_members_by_emails(emails)`**: batch email lookup,
+  returns `{email: Person}` dict
+- **File size validation**: `upload_file()` raises `PyrusFileSizeError`
+  when file exceeds 250 MB (Pyrus API limit) — early client-side check
+  instead of a cryptic server error
+- **`PyrusFileSizeError`** exception (exported from top-level package)
+- **`stream_register(predicate=...)`**: optional predicate callback
+  to filter tasks during streaming without loading the full register
+
+---
 ## [0.3.0] — 2026-02-28
 
 ### Added

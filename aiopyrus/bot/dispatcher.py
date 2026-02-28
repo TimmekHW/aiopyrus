@@ -197,6 +197,28 @@ class Dispatcher(Router):
         on_startup / on_shutdown:
             Optional async callables executed at start/stop.
 
+        Warning
+        -------
+        Если хендлер **изменяет** задачу (``ctx.set(...)``, ``ctx.answer(...)``),
+        ``last_modified_date`` обновится — следующий poll вызовет хендлер повторно.
+        Это может привести к дублированию комментариев или бесконечному циклу.
+
+        If a handler **modifies** the task (``ctx.set(...)``, ``ctx.answer(...)``),
+        ``last_modified_date`` changes and the next poll re-dispatches it.
+        This can cause duplicate comments or infinite loops.
+
+        Защита — ``FieldValueFilter`` в декораторе /
+        Guard with ``FieldValueFilter`` in the decorator::
+
+            @dp.task_received(
+                FormFilter(321), StepFilter(2),
+                FieldValueFilter(field_name="Статус", value="Открыта"),
+            )
+
+        После первого прогона статус уже не «Открыта» → фильтр отсекает задачу.
+        After the first run the status is no longer "Открыта" — the filter
+        rejects the task before the handler fires again.
+
         Example::
 
             bot = PyrusBot(login="bot@...", security_key="SECRET", api_url="...")

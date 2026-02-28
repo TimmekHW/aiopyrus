@@ -370,6 +370,83 @@ class Task(PyrusModel):
                     continue
             results.append(field)
 
+    # ---- Approval helpers ----
+
+    def get_approvals(
+        self,
+        step: int,
+        *,
+        choice: ApprovalChoice | str | None = None,
+    ) -> list[ApprovalEntry]:
+        """Get approvers for a workflow step, optionally filtered by choice.
+
+        Получить согласующих на этапе, опционально отфильтровав по выбору.
+
+        Args:
+            step:   Workflow step number (1-based).
+            choice: Filter by approval choice (e.g. ``ApprovalChoice.approved``).
+
+        Example::
+
+            task.get_approvals(2)
+            task.get_approvals(2, choice="approved")
+            task.get_approvals(2, choice=ApprovalChoice.waiting)
+        """
+        if not self.approvals or step < 1 or step > len(self.approvals):
+            return []
+        entries = self.approvals[step - 1]
+        if choice is None:
+            return list(entries)
+        choice_val = choice.value if isinstance(choice, ApprovalChoice) else str(choice)
+        return [
+            e
+            for e in entries
+            if (e.approval_choice is not None and e.approval_choice.value == choice_val)
+            or (choice_val == "waiting" and e.approval_choice is None)
+        ]
+
+    @property
+    def approvals_by_step(self) -> dict[int, list[ApprovalEntry]]:
+        """Approvals indexed by step number (1-based).
+
+        Согласования, индексированные по номеру этапа (с 1).
+
+        Returns:
+            ``{1: [ApprovalEntry, ...], 2: [...]}``
+        """
+        if not self.approvals:
+            return {}
+        return {i + 1: list(entries) for i, entries in enumerate(self.approvals)}
+
+    def get_approver_names(
+        self, step: int, *, choice: ApprovalChoice | str | None = None
+    ) -> list[str]:
+        """Get approver full names for a step.
+
+        Имена согласующих на этапе.
+        """
+        return [e.person.full_name for e in self.get_approvals(step, choice=choice)]
+
+    def get_approver_emails(
+        self, step: int, *, choice: ApprovalChoice | str | None = None
+    ) -> list[str]:
+        """Get approver emails for a step (skips persons without email).
+
+        Email-адреса согласующих на этапе.
+        """
+        return [e.person.email for e in self.get_approvals(step, choice=choice) if e.person.email]
+
+    def get_approver_ids(
+        self, step: int, *, choice: ApprovalChoice | str | None = None
+    ) -> list[int]:
+        """Get approver person IDs for a step.
+
+        ID согласующих на этапе.
+        """
+        return [e.person.id for e in self.get_approvals(step, choice=choice)]
+
+    # ---- Convenience ----
+
     def context(self, client: Any) -> Any:
         """Обернуть задачу в aiogram-стайл TaskContext.
 

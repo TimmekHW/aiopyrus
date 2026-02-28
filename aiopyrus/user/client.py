@@ -12,6 +12,7 @@ from urllib.parse import urlparse
 import aiofiles
 
 from aiopyrus.api.session import PyrusSession
+from aiopyrus.exceptions import PyrusFileSizeError
 from aiopyrus.types.catalog import Catalog, CatalogSyncResult
 from aiopyrus.types.file import UploadedFile
 from aiopyrus.types.form import Form
@@ -38,6 +39,8 @@ from aiopyrus.types.params import (
 )
 
 log = logging.getLogger("aiopyrus.client")
+
+_MAX_UPLOAD_SIZE = 250 * 1024 * 1024  # 250 MB — Pyrus API limit
 
 
 async def _iter_json_array(chunks: AsyncIterator[str], key: str) -> AsyncIterator[dict[str, Any]]:
@@ -692,6 +695,7 @@ class UserClient:
         closed_after: str | None = None,
         due_filter: str | None = None,
         field_filters: dict[str, str] | None = None,
+        predicate: Any | None = None,
     ) -> AsyncIterator[Task]:
         """Stream register tasks one by one without loading entire response.
 
@@ -700,10 +704,22 @@ class UserClient:
 
         Принимает те же параметры фильтрации, что и ``get_register()``.
 
+        Args:
+            predicate: Optional callable ``(Task) -> bool`` — only yield tasks
+                       where ``predicate(task)`` returns True.  Saves memory
+                       by skipping non-matching tasks during streaming.
+                       Use for conditions the server can't filter (field values,
+                       combined logic).  For step filtering use ``steps=``.
+
         Example::
 
             async for task in client.stream_register(321, steps=[1, 2]):
                 print(task.id, task.current_step)
+
+            # Client-side filter — e.g. only tasks with text
+            async for task in client.stream_register(321,
+                predicate=lambda t: t.text):
+                process(task)
         """
         params: dict[str, Any] = {}
         if steps:
@@ -733,7 +749,9 @@ class UserClient:
 
         chunks = self._session.stream_get(f"forms/{form_id}/register", params=params or None)
         async for obj in _iter_json_array(chunks, "tasks"):
-            yield Task.model_validate(obj)
+            task = Task.model_validate(obj)
+            if predicate is None or predicate(task):
+                yield task
 
     # ------------------------------------------------------------------
     # Event log (on-premise only)
@@ -1199,6 +1217,11 @@ class UserClient:
             file_bytes = file.read()
 
         filename = filename or "upload"
+        if len(file_bytes) > _MAX_UPLOAD_SIZE:
+            raise PyrusFileSizeError(
+                f"File size {len(file_bytes) / 1024 / 1024:.1f} MB exceeds "
+                f"the maximum upload size of 250 MB"
+            )
         files = {"file": (filename, file_bytes)}
         data = await self._session.post("files/upload", files=files)
         return UploadedFile.model_validate(data)
@@ -1374,6 +1397,43 @@ class UserClient:
                 or query in (m.email or "").lower()
             ):
                 result.append(m)
+        return result
+
+    async def find_member_by_email(self, email: str) -> Person | None:
+        """Find a member by exact email address (case-insensitive).
+
+        Поиск участника по точному email (регистронезависимый).
+
+        Example::
+
+            person = await client.find_member_by_email("kolbasenko@example.com")
+            if person:
+                print(person.full_name)
+        """
+        query = email.lower()
+        members = await self.get_members()
+        for m in members:
+            if m.email and m.email.lower() == query:
+                return m
+        return None
+
+    async def find_members_by_emails(self, emails: list[str]) -> dict[str, Person]:
+        """Find members by email addresses. Returns ``{email: Person}`` dict.
+
+        Поиск участников по email. Возвращает ``{email: Person}`` для найденных.
+
+        Example::
+
+            found = await client.find_members_by_emails(["a@ex.com", "b@ex.com"])
+            for email, person in found.items():
+                print(f"{email} → {person.full_name}")
+        """
+        query = {e.lower() for e in emails}
+        members = await self.get_members()
+        result: dict[str, Person] = {}
+        for m in members:
+            if m.email and m.email.lower() in query:
+                result[m.email.lower()] = m
         return result
 
     async def task_context(self, task_id: int) -> TaskContext:
