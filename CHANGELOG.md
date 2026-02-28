@@ -5,6 +5,27 @@ All notable changes to **aiopyrus** will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
+## [0.3.0] — 2026-02-28
+
+### Added
+- **JWT preemptive refresh**: token is refreshed proactively before expiry
+  (parses `exp` claim from JWT, no external dependencies) instead of waiting
+  for a 401 error — saves one wasted API round-trip per token cycle
+- **URL helpers**: `get_task_url(task_id)`, `get_form_url(form_id)` —
+  browser-ready links for tasks and forms (works for both cloud and on-premise)
+- **`SyncClient`**: synchronous wrapper for scripts, notebooks, and simple
+  integrations — all `UserClient` methods available as blocking calls
+  (`from aiopyrus import SyncClient`)
+- **`get_registers(form_ids)`**: fetch multiple form registers in parallel,
+  returns `{form_id: [Task, ...]}` dict (failed forms are skipped)
+- **`stream_register(form_id)`**: memory-efficient streaming for large
+  registers (10 000+ tasks) — yields `Task` objects one by one via
+  incremental JSON parsing (no `ijson` dependency needed)
+- **`PyrusSession.stream_get()`**: authenticated streaming GET for
+  non-buffered response processing
+- **`PyrusSession.web_base`**: browser-facing base URL property
+
+---
 ## [0.2.0] — 2026-02-27
 
 ### Added

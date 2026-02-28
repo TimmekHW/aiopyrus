@@ -11,9 +11,9 @@ Aiogram-style architecture. Powered by HTTPX.
 
 > **[Русская версия](README.md)**
 
-## Two Modes of Operation
+## Three Modes of Operation
 
-### UserClient — scripts under your own account
+### UserClient — async scripts under your own account
 
 Task automation, data exports, bulk operations — **under your own Pyrus account**.
 No bot registration needed, no public server required.
@@ -31,6 +31,22 @@ async def main():
         print(ctx.get("Task Status", "not set"))
 
 asyncio.run(main())
+```
+
+### SyncClient — simple scripts without async/await
+
+Same functionality as `UserClient`, but without `async/await`.
+For scripts, Jupyter notebooks, and simple integrations.
+
+```python
+from aiopyrus import SyncClient
+
+with SyncClient(login="user@example.com", security_key="KEY") as client:
+    profile = client.get_profile()
+    print(f"Hello, {profile.first_name}!")
+
+    ctx = client.task_context(12345678)
+    print(ctx["Task Status"])
 ```
 
 ### PyrusBot — webhook / polling bot
@@ -188,6 +204,15 @@ async with UserClient(login=LOGIN, security_key=KEY) as client:
     # CSV export
     csv_text = await client.get_register_csv(321, steps=[1, 2])
 
+    # Multiple form registers in parallel
+    regs = await client.get_registers([321, 322, 323])
+    for form_id, tasks in regs.items():
+        print(f"Form {form_id}: {len(tasks)} tasks")
+
+    # Stream large register (10 000+ tasks, no full load into memory)
+    async for task in client.stream_register(321, steps=[1, 2]):
+        print(task.id, task.current_step)
+
     # Parallel search across multiple forms
     all_tasks = await client.search_tasks({321: [1, 2], 322: None})
 
@@ -255,6 +280,9 @@ async with UserClient(login=LOGIN, security_key=KEY) as client:
         ctxs[1].reject("Rejected"),
     )
 
+    # Multiple form registers in parallel
+    regs = await client.get_registers([321, 322, 323])
+
     # Batch role and member operations
     await client.create_roles([NewRole(name="Admins", member_ids=[1, 2]), NewRole(name="Users")])
     await client.update_members([MemberUpdate(member_id=100, position="Lead"), MemberUpdate(member_id=200, position="Dev")])
@@ -285,6 +313,20 @@ updates = [
 ]
 await client.comment_task(task.id, field_updates=updates)
 ```
+
+### URL Helpers
+
+```python
+# Browser link to a task
+url = client.get_task_url(12345678)
+# → "https://pyrus.com/t#id12345678"
+
+# Browser link to a form
+url = client.get_form_url(321)
+# → "https://pyrus.com/form/321"
+```
+
+Works for on-premise too: `https://pyrus.mycompany.com/t#id12345678`.
 
 ### Other utilities
 

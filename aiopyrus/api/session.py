@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import json as _json
 import logging
 import re
 import time
+from collections.abc import AsyncIterator
 from typing import Any
 
 import httpx
@@ -44,6 +47,32 @@ def _retry_wait(response: httpx.Response, default: float) -> float:
             except ValueError:
                 pass
     return default
+
+
+def _jwt_exp(token: str) -> float | None:
+    """Extract ``exp`` (Unix timestamp) from a JWT without verifying signature.
+
+    Returns ``None`` for opaque or malformed tokens — caller falls back to
+    the regular 401-based refresh.
+    """
+    try:
+        payload_b64 = token.split(".")[1]
+        padded = payload_b64 + "=" * (-len(payload_b64) % 4)
+        payload = _json.loads(base64.urlsafe_b64decode(padded))
+        return float(payload["exp"])
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _web_base_from_api_url(api_url: str) -> str:
+    """Derive the browser-facing base URL from the API URL.
+
+    ``https://api.pyrus.com/v4/``          → ``https://pyrus.com``
+    ``https://pyrus.corp.ru/api/v4/``      → ``https://pyrus.corp.ru``
+    """
+    base = re.sub(r"(/api)?/v\d+/?$", "", api_url.rstrip("/"))
+    base = re.sub(r"^(https?://)api\.", r"\1", base)
+    return base
 
 
 def _derive_urls(base_url: str, api_version: str) -> tuple[str, str]:
@@ -124,6 +153,7 @@ class PyrusSession:
             self._api_url_explicit = api_url is not None
 
         self._access_token: str | None = None
+        self._token_expires_at: float | None = None
         self._files_url: str = files_url or _DEFAULT_FILES_URL
         self._client: httpx.AsyncClient | None = None
 
@@ -181,6 +211,7 @@ class PyrusSession:
 
         token: str = data["access_token"]
         self._access_token = token
+        self._token_expires_at = _jwt_exp(token)
 
         # Update api_url / files_url from auth response (cloud Pyrus returns these)
         if not self._api_url_explicit and "api_url" in data:
@@ -200,6 +231,11 @@ class PyrusSession:
     @property
     def is_authenticated(self) -> bool:
         return self._access_token is not None
+
+    @property
+    def web_base(self) -> str:
+        """Browser-facing base URL (e.g. ``https://pyrus.com``)."""
+        return _web_base_from_api_url(self._api_url)
 
     # ------------------------------------------------------------------
     # Request helpers
@@ -266,6 +302,10 @@ class PyrusSession:
 
         # Lazy auth: authenticate on first API call if no token yet
         if not self._access_token:
+            await self.auth()
+        # Proactive JWT refresh: re-auth before the token expires
+        elif self._token_expires_at is not None and time.time() > self._token_expires_at - 60:
+            log.debug("Token expiring soon, refreshing proactively")
             await self.auth()
 
         # Rate limiting: block here if needed (counted once per logical request)
@@ -367,6 +407,33 @@ class PyrusSession:
         response = await client.request(method, url, params=params, headers=headers)
         response.raise_for_status()
         return response
+
+    # ------------------------------------------------------------------
+    # Streaming
+    # ------------------------------------------------------------------
+
+    async def stream_get(
+        self,
+        path: str,
+        *,
+        params: dict | None = None,
+    ) -> AsyncIterator[str]:
+        """Authenticated streaming GET, yields text chunks.
+
+        Аутентифицированный потоковый GET, выдаёт текстовые чанки.
+        """
+        url = f"{self._api_url.rstrip('/')}/{path.lstrip('/')}"
+        client = await self._get_client()
+        if not self._access_token or (
+            self._token_expires_at is not None and time.time() > self._token_expires_at - 60
+        ):
+            await self.auth()
+        await self._rate_limiter.acquire()
+        headers = self._auth_headers()
+        async with client.stream("GET", url, params=params, headers=headers) as resp:
+            resp.raise_for_status()
+            async for chunk in resp.aiter_text():
+                yield chunk
 
     # ------------------------------------------------------------------
     # Context manager support

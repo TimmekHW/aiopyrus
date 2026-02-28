@@ -11,9 +11,9 @@
 
 > **[English version](README.en.md)**
 
-## Два режима работы
+## Три режима работы
 
-### UserClient — скрипты от своего имени
+### UserClient — скрипты от своего имени (async)
 
 Автоматизация задач, выгрузки, массовые операции — **от имени вашего аккаунта Pyrus**.
 Не нужно регистрировать бота, не нужен публичный сервер.
@@ -31,6 +31,22 @@ async def main():
         print(ctx.get("Статус задачи", "не задан"))
 
 asyncio.run(main())
+```
+
+### SyncClient — простые скрипты без async/await
+
+Та же функциональность, что у `UserClient`, но без `async/await`.
+Для скриптов, Jupyter-ноутбуков и простых интеграций.
+
+```python
+from aiopyrus import SyncClient
+
+with SyncClient(login="user@example.com", security_key="KEY") as client:
+    profile = client.get_profile()
+    print(f"Привет, {profile.first_name}!")
+
+    ctx = client.task_context(12345678)
+    print(ctx["Статус задачи"])
 ```
 
 ### PyrusBot — бот на вебхуках / polling
@@ -210,6 +226,15 @@ async with UserClient(login=LOGIN, security_key=KEY) as client:
     # CSV-экспорт реестра
     csv_text = await client.get_register_csv(321, steps=[1, 2])
 
+    # Реестры нескольких форм параллельно
+    regs = await client.get_registers([321, 322, 323])
+    for form_id, tasks in regs.items():
+        print(f"Форма {form_id}: {len(tasks)} задач")
+
+    # Потоковое чтение большого реестра (10 000+ задач, без загрузки в память)
+    async for task in client.stream_register(321, steps=[1, 2]):
+        print(task.id, task.current_step)
+
     # Параллельный поиск по нескольким формам
     all_tasks = await client.search_tasks({321: [1, 2], 322: None})
 
@@ -277,6 +302,9 @@ async with UserClient(login=LOGIN, security_key=KEY) as client:
         ctxs[1].reject("Отклонено"),
     )
 
+    # Реестры нескольких форм параллельно
+    regs = await client.get_registers([321, 322, 323])
+
     # Батч-операции с ролями и участниками
     await client.create_roles([NewRole(name="Admins", member_ids=[1, 2]), NewRole(name="Users")])
     await client.update_members([MemberUpdate(member_id=100, position="Lead"), MemberUpdate(member_id=200, position="Dev")])
@@ -307,6 +335,20 @@ updates = [
 ]
 await client.comment_task(task.id, field_updates=updates)
 ```
+
+### URL-хелперы
+
+```python
+# Ссылка на задачу в браузере
+url = client.get_task_url(12345678)
+# → "https://pyrus.com/t#id12345678"
+
+# Ссылка на форму
+url = client.get_form_url(321)
+# → "https://pyrus.com/form/321"
+```
+
+Работают и для on-premise: `https://pyrus.mycompany.ru/t#id12345678`.
 
 ### Прочие утилиты
 

@@ -9,7 +9,7 @@ the Pyrus UI) without knowing field IDs, choice_id values, or person_id numbers.
 Quick start / Быстрый старт
 ----------------------------
 
-**User client — one-shot automation / Разовые операции**::
+**Async client / Асинхронный клиент**::
 
     import asyncio
     from aiopyrus import UserClient
@@ -17,32 +17,19 @@ Quick start / Быстрый старт
     async def main():
         async with UserClient(login="user@example.com", security_key="KEY") as client:
             ctx = await client.task_context(12345678)
-
-            # Read fields by name (as shown in the Pyrus UI)
-            # Читаем поля по имени из интерфейса
-            status   = ctx["Статус задачи"]   # → "Открыта"  /  "Open"
-            executor = ctx["Исполнитель"]      # → "Иванов Иван"
-
-            # Lazy write + send / Запись (ленивая) + отправка
-            ctx.set("Статус задачи", "В работе").set("Исполнитель", "ivanov")
-            await ctx.answer("Задача принята в работу")  # or any text
-
-            # Time tracking / Трекинг времени
-            await ctx.log_time(60, "Incident analysis")
-
-            # Reassign / Переназначить
-            await ctx.reassign("Иванов Иван", "Passing this to you")
-
-            # Reply to a comment / Ответить на комментарий
-            first = ctx.task.comments[0]
-            await ctx.reply(first.id, "Please clarify the details")
-
-            # Finish / Завершить
-            ctx.set("Статус задачи", "Выполнена")
-            await ctx.approve("Processing complete")
+            status = ctx["Статус задачи"]   # → "Открыта"
+            ctx.set("Статус задачи", "В работе")
+            await ctx.answer("Принято в работу")
 
     asyncio.run(main())
 
+**Sync client — scripts & notebooks / Скрипты и ноутбуки**::
+
+    from aiopyrus import SyncClient
+
+    with SyncClient(login="user@example.com", security_key="KEY") as client:
+        ctx = client.task_context(12345678)
+        print(ctx["Статус задачи"])
 
 **Bot — webhook-driven, aiogram-style / Вебхук-бот**::
 
@@ -165,15 +152,17 @@ from .types import (
     UploadedFile,
     WebhookPayload,
 )
+from .sync import SyncClient
 from .user.client import UserClient
 from .utils.context import TaskContext
 from .utils.fields import FieldUpdate, format_mention, get_flat_fields, select_fields
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 _CODENAME = "Перезрелая груша с кривым API"  # 🍐
 __all__ = [
     # Clients & context
     "UserClient",
+    "SyncClient",
     "TaskContext",
     "PyrusBot",
     # Bot infrastructure

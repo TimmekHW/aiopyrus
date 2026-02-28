@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import pathlib
 import warnings
+from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING, Any, BinaryIO
 from urllib.parse import urlparse
 
@@ -36,6 +38,46 @@ from aiopyrus.types.params import (
 )
 
 log = logging.getLogger("aiopyrus.client")
+
+
+async def _iter_json_array(chunks: AsyncIterator[str], key: str) -> AsyncIterator[dict[str, Any]]:
+    """Parse a JSON response stream, yielding dicts from the array at *key*.
+
+    Uses ``json.JSONDecoder.raw_decode`` to extract complete objects one by one
+    without loading the entire response into memory.  No external dependencies.
+    """
+    buf = ""
+    decoder = json.JSONDecoder()
+    in_array = False
+    min_tail = len(key) + 10
+
+    async for chunk in chunks:
+        buf += chunk
+        if not in_array:
+            idx = buf.find(f'"{key}"')
+            if idx == -1:
+                # Keep a small tail in case the key spans two chunks
+                if len(buf) > min_tail:
+                    buf = buf[-min_tail:]
+                continue
+            bracket = buf.find("[", idx)
+            if bracket == -1:
+                continue
+            buf = buf[bracket + 1 :]
+            in_array = True
+
+        while True:
+            buf = buf.lstrip(" ,\n\r\t")
+            if not buf:
+                break  # need more data
+            if buf[0] == "]":
+                return  # end of array
+            try:
+                obj, end = decoder.raw_decode(buf)
+                yield obj
+                buf = buf[end:]
+            except json.JSONDecodeError:
+                break  # incomplete object — need more data
 
 
 class UserClient:
@@ -99,6 +141,30 @@ class UserClient:
 
     async def __aexit__(self, *_: Any) -> None:
         await self.close()
+
+    # ------------------------------------------------------------------
+    # URL helpers
+    # ------------------------------------------------------------------
+
+    def get_task_url(self, task_id: int) -> str:
+        """Browser URL for a task.
+
+        Ссылка на задачу в браузере::
+
+            url = client.get_task_url(12345678)
+            # → "https://pyrus.com/t#id12345678"
+        """
+        return f"{self._session.web_base}/t#id{task_id}"
+
+    def get_form_url(self, form_id: int) -> str:
+        """Browser URL for a form.
+
+        Ссылка на форму в браузере::
+
+            url = client.get_form_url(321)
+            # → "https://pyrus.com/form/321"
+        """
+        return f"{self._session.web_base}/form/{form_id}"
 
     # ------------------------------------------------------------------
     # Profile
@@ -610,6 +676,65 @@ class UserClient:
         )
         return response.text
 
+    async def stream_register(
+        self,
+        form_id: int,
+        *,
+        steps: list[int] | None = None,
+        include_archived: bool = False,
+        field_ids: list[int] | None = None,
+        item_count: int | None = None,
+        created_before: str | None = None,
+        created_after: str | None = None,
+        modified_before: str | None = None,
+        modified_after: str | None = None,
+        closed_before: str | None = None,
+        closed_after: str | None = None,
+        due_filter: str | None = None,
+        field_filters: dict[str, str] | None = None,
+    ) -> AsyncIterator[Task]:
+        """Stream register tasks one by one without loading entire response.
+
+        Потоковое чтение реестра — задачи приходят по одной, не загружая
+        весь JSON в память. Полезно для реестров с 10 000+ задач.
+
+        Принимает те же параметры фильтрации, что и ``get_register()``.
+
+        Example::
+
+            async for task in client.stream_register(321, steps=[1, 2]):
+                print(task.id, task.current_step)
+        """
+        params: dict[str, Any] = {}
+        if steps:
+            params["steps"] = ",".join(str(s) for s in steps)
+        if include_archived:
+            params["include_archived"] = "y"
+        if field_ids:
+            params["field_ids"] = ",".join(str(i) for i in field_ids)
+        if item_count is not None:
+            params["item_count"] = item_count
+        if created_before:
+            params["created_before"] = created_before
+        if created_after:
+            params["created_after"] = created_after
+        if modified_before:
+            params["modified_before"] = modified_before
+        if modified_after:
+            params["modified_after"] = modified_after
+        if closed_before:
+            params["closed_before"] = closed_before
+        if closed_after:
+            params["closed_after"] = closed_after
+        if due_filter:
+            params["due_filter"] = due_filter
+        if field_filters:
+            params.update(field_filters)
+
+        chunks = self._session.stream_get(f"forms/{form_id}/register", params=params or None)
+        async for obj in _iter_json_array(chunks, "tasks"):
+            yield Task.model_validate(obj)
+
     # ------------------------------------------------------------------
     # Event log (on-premise only)
     # ------------------------------------------------------------------
@@ -781,6 +906,43 @@ class UserClient:
                 continue
             result.extend(batch)
         return result
+
+    async def get_registers(
+        self,
+        form_ids: list[int],
+        **kwargs: Any,
+    ) -> dict[int, list[Task]]:
+        """Fetch registers for multiple forms in parallel.
+
+        Реестры нескольких форм параллельно. Формы с ошибками (403/404)
+        пропускаются и логируются — остальные возвращаются.
+
+        Args:
+            form_ids: Список ID форм.
+            **kwargs: Параметры ``get_register()`` (steps, field_ids, …).
+
+        Returns:
+            ``{form_id: [Task, ...]}`` — dict с задачами по каждой форме.
+
+        Example::
+
+            regs = await client.get_registers([100001, 100002, 100003])
+            for form_id, tasks in regs.items():
+                print(f"Form {form_id}: {len(tasks)} tasks")
+        """
+
+        async def _one(fid: int) -> tuple[int, list[Task]]:
+            return fid, await self.get_register(fid, **kwargs)
+
+        coros = [_one(fid) for fid in form_ids]
+        results = await asyncio.gather(*coros, return_exceptions=True)
+        out: dict[int, list[Task]] = {}
+        for i, r in enumerate(results):
+            if isinstance(r, BaseException):
+                log.warning("get_registers: form %d failed: %s", form_ids[i], r)
+            else:
+                out[r[0]] = r[1]
+        return out
 
     # ------------------------------------------------------------------
     # Task Lists
