@@ -52,8 +52,10 @@ class SyncClient:
 
     def close(self) -> None:
         """Close the underlying HTTP session and event loop."""
-        self._run(self._async.close())
-        self._loop.close()
+        try:
+            self._run(self._async.close())
+        finally:
+            self._loop.close()
 
     def __enter__(self) -> SyncClient:
         return self

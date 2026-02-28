@@ -156,6 +156,7 @@ class PyrusSession:
         self._token_expires_at: float | None = None
         self._files_url: str = files_url or _DEFAULT_FILES_URL
         self._client: httpx.AsyncClient | None = None
+        self._auth_lock = asyncio.Lock()
 
     # ------------------------------------------------------------------
     # Client lifecycle
@@ -300,13 +301,14 @@ class PyrusSession:
 
         client = await self._get_client()
 
-        # Lazy auth: authenticate on first API call if no token yet
-        if not self._access_token:
-            await self.auth()
-        # Proactive JWT refresh: re-auth before the token expires
-        elif self._token_expires_at is not None and time.time() > self._token_expires_at - 60:
-            log.debug("Token expiring soon, refreshing proactively")
-            await self.auth()
+        # Lazy auth / proactive refresh — serialised so concurrent coroutines
+        # don't all race to call auth() at the same time.
+        async with self._auth_lock:
+            if not self._access_token:
+                await self.auth()
+            elif self._token_expires_at is not None and time.time() > self._token_expires_at - 60:
+                log.debug("Token expiring soon, refreshing proactively")
+                await self.auth()
 
         # Rate limiting: block here if needed (counted once per logical request)
         await self._rate_limiter.acquire()
@@ -331,7 +333,13 @@ class PyrusSession:
             )
 
         t0 = time.perf_counter()
-        response = await _do_request()
+        try:
+            response = await _do_request()
+        except (httpx.ConnectError, httpx.TimeoutException, httpx.ReadError) as exc:
+            log.warning("Network error (%s), retrying in 5s …", exc)
+            await asyncio.sleep(5.0)
+            t0 = time.perf_counter()
+            response = await _do_request()
 
         # --- 401: token expired → re-auth and retry once (skip if permanently revoked)
         if response.status_code == 401 and self._login:
@@ -341,7 +349,8 @@ class PyrusSession:
                 err_code = ""
             if err_code not in _PERMANENT_AUTH_ERRORS:
                 log.debug("Token expired (%s), re-authenticating …", err_code or "unknown")
-                await self.auth()
+                async with self._auth_lock:
+                    await self.auth()
                 req_headers.update(self._auth_headers())
                 t0 = time.perf_counter()
                 response = await _do_request()
@@ -391,17 +400,19 @@ class PyrusSession:
         path: str,
         *,
         params: dict | None = None,
+        use_files_url: bool = False,
     ) -> httpx.Response:
         """Аутентифицированный запрос, возвращающий сырой httpx.Response.
 
         Make an authenticated API request and return the raw httpx.Response.
         Used for endpoints that return non-JSON content (PDF, CSV).
         """
-        base = self._api_url
+        base = self._files_url if use_files_url else self._api_url
         url = f"{base.rstrip('/')}/{path.lstrip('/')}"
         client = await self._get_client()
-        if not self._access_token:
-            await self.auth()
+        async with self._auth_lock:
+            if not self._access_token:
+                await self.auth()
         await self._rate_limiter.acquire()
         headers = self._auth_headers()
         response = await client.request(method, url, params=params, headers=headers)
@@ -424,10 +435,11 @@ class PyrusSession:
         """
         url = f"{self._api_url.rstrip('/')}/{path.lstrip('/')}"
         client = await self._get_client()
-        if not self._access_token or (
-            self._token_expires_at is not None and time.time() > self._token_expires_at - 60
-        ):
-            await self.auth()
+        async with self._auth_lock:
+            if not self._access_token or (
+                self._token_expires_at is not None and time.time() > self._token_expires_at - 60
+            ):
+                await self.auth()
         await self._rate_limiter.acquire()
         headers = self._auth_headers()
         async with client.stream("GET", url, params=params, headers=headers) as resp:

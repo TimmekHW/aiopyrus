@@ -5,6 +5,31 @@ All notable changes to **aiopyrus** will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
+## [0.5.0] — 2026-02-28
+
+### Added
+- **Batch concurrency limit**: `UserClient(max_concurrent=10)` — все batch-методы
+  (`get_tasks`, `create_tasks`, `get_registers`, `download_print_forms` и др.)
+  теперь ограничены семафором вместо неконтролируемого `asyncio.gather` на сотни
+  параллельных запросов
+- **Network retry**: `ConnectError`, `TimeoutException`, `ReadError` —
+  автоматический retry через 5 секунд (один раз) вместо мгновенного падения
+  при временном сбое сети
+- **Auth lock**: `asyncio.Lock` на token refresh — конкурентные корутины
+  не устраивают гонку из 10 одновременных POST на `/auth`
+- **`request_raw(use_files_url=)`**: поддержка files-хоста для скачивания файлов
+
+### Fixed
+- **`upload_file`**: размер файла проверяется **до** чтения в память
+  (`os.path.getsize` / `seek+tell`), а не после загрузки 260 МБ в `file_bytes`
+- **`download_file`**: перенесён на `request_raw()` — проходит через
+  rate limiter и auth lock вместо прямого `client.get()`
+- **Polling memory leak**: `seen` dict теперь ограничен 10 000 записями
+  с автоматическим удалением самых старых (раньше рос бесконечно в 24/7 ботах)
+- **`SyncClient.close()`**: `try/finally` — event loop закрывается даже
+  если `async close()` бросил исключение
+
+---
 ## [0.4.0] — 2026-02-28
 
 ### Added

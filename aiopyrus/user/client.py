@@ -110,7 +110,9 @@ class UserClient:
         requests_per_second: int | None = None,
         requests_per_minute: int | None = None,
         requests_per_10min: int = 5000,
+        max_concurrent: int = 10,
     ) -> None:
+        self._semaphore = asyncio.Semaphore(max_concurrent)
         self._session = PyrusSession(
             login,
             security_key,
@@ -130,6 +132,11 @@ class UserClient:
     # ------------------------------------------------------------------
     # Context manager / lifecycle
     # ------------------------------------------------------------------
+
+    async def _bounded(self, coro: Any) -> Any:
+        """Run *coro* under the concurrency semaphore."""
+        async with self._semaphore:
+            return await coro
 
     async def auth(self) -> str:
         """Manually authenticate and obtain the access token."""
@@ -916,7 +923,7 @@ class UserClient:
             )
             for form_id, steps in forms.items()
         ]
-        batches = await asyncio.gather(*coros, return_exceptions=True)
+        batches = await asyncio.gather(*[self._bounded(c) for c in coros], return_exceptions=True)
         result: list[Task] = []
         for form_id, batch in zip(forms, batches, strict=True):
             if isinstance(batch, BaseException):
@@ -953,7 +960,7 @@ class UserClient:
             return fid, await self.get_register(fid, **kwargs)
 
         coros = [_one(fid) for fid in form_ids]
-        results = await asyncio.gather(*coros, return_exceptions=True)
+        results = await asyncio.gather(*[self._bounded(c) for c in coros], return_exceptions=True)
         out: dict[int, list[Task]] = {}
         for i, r in enumerate(results):
             if isinstance(r, BaseException):
@@ -1209,11 +1216,28 @@ class UserClient:
         if isinstance(file, (str, pathlib.Path)):
             path = pathlib.Path(file)
             filename = filename or path.name
+            size = path.stat().st_size
+            if size > _MAX_UPLOAD_SIZE:
+                raise PyrusFileSizeError(
+                    f"File size {size / 1024 / 1024:.1f} MB exceeds "
+                    f"the maximum upload size of 250 MB"
+                )
             async with aiofiles.open(path, "rb") as fh:
                 file_bytes = await fh.read()
         elif isinstance(file, bytes):
             file_bytes = file
         else:
+            # BinaryIO — check size via seek if possible
+            if hasattr(file, "seek") and hasattr(file, "tell"):
+                pos = file.tell()
+                file.seek(0, 2)
+                size = file.tell()
+                file.seek(pos)
+                if size > _MAX_UPLOAD_SIZE:
+                    raise PyrusFileSizeError(
+                        f"File size {size / 1024 / 1024:.1f} MB exceeds "
+                        f"the maximum upload size of 250 MB"
+                    )
             file_bytes = file.read()
 
         filename = filename or "upload"
@@ -1228,10 +1252,9 @@ class UserClient:
 
     async def download_file(self, file_id: str) -> bytes:
         """GET /files/download/{file_id} — download a file as bytes."""
-        url = f"{self._session._files_url.rstrip('/')}/files/download/{file_id}"
-        client = await self._session._get_client()
-        response = await client.get(url, headers=self._session._auth_headers())
-        response.raise_for_status()
+        response = await self._session.request_raw(
+            "GET", f"files/download/{file_id}", use_files_url=True
+        )
         return response.content
 
     async def download_print_form(self, task_id: int, print_form_id: int) -> bytes:
@@ -1275,7 +1298,7 @@ class UserClient:
             ])
         """
         coros = [self.download_print_form(item.task_id, item.print_form_id) for item in items]
-        results = await asyncio.gather(*coros, return_exceptions=True)
+        results = await asyncio.gather(*[self._bounded(c) for c in coros], return_exceptions=True)
         return list(results)
 
     # ------------------------------------------------------------------
@@ -1611,7 +1634,7 @@ class UserClient:
         Get external_ids for multiple members in parallel.
         """
         coros = [self.get_member_external_id(mid) for mid in member_ids]
-        results = await asyncio.gather(*coros, return_exceptions=True)
+        results = await asyncio.gather(*[self._bounded(c) for c in coros], return_exceptions=True)
         return [None if isinstance(r, BaseException) else r for r in results]
 
     async def get_roles_external_ids(self, role_ids: list[int]) -> list[int | None]:
@@ -1632,7 +1655,7 @@ class UserClient:
         Ошибки (404, 403 и т.д.) логируются и пропускаются.
         """
         coros = [self.get_task(tid) for tid in task_ids]
-        results = await asyncio.gather(*coros, return_exceptions=True)
+        results = await asyncio.gather(*[self._bounded(c) for c in coros], return_exceptions=True)
         tasks: list[Task] = []
         for tid, result in zip(task_ids, results, strict=True):
             if isinstance(result, BaseException):
@@ -1662,7 +1685,7 @@ class UserClient:
             ])
         """
         coros = [self.create_task(**t.model_dump(exclude_none=True)) for t in tasks]
-        results = await asyncio.gather(*coros, return_exceptions=True)
+        results = await asyncio.gather(*[self._bounded(c) for c in coros], return_exceptions=True)
         return list(results)
 
     async def delete_tasks(self, task_ids: list[int]) -> list[bool]:
@@ -1674,7 +1697,7 @@ class UserClient:
             Список bool (True = удалена, False = ошибка).
         """
         coros = [self.delete_task(tid) for tid in task_ids]
-        results = await asyncio.gather(*coros, return_exceptions=True)
+        results = await asyncio.gather(*[self._bounded(c) for c in coros], return_exceptions=True)
         return [r if isinstance(r, bool) else False for r in results]
 
     # ------------------------------------------------------------------
@@ -1696,7 +1719,7 @@ class UserClient:
             ])
         """
         coros = [self.create_role(r.name, r.member_ids) for r in roles]
-        results = await asyncio.gather(*coros, return_exceptions=True)
+        results = await asyncio.gather(*[self._bounded(c) for c in coros], return_exceptions=True)
         return list(results)
 
     async def update_roles(self, updates: list[RoleUpdate]) -> list[Role | BaseException]:
@@ -1720,7 +1743,7 @@ class UserClient:
             )
             for u in updates
         ]
-        results = await asyncio.gather(*coros, return_exceptions=True)
+        results = await asyncio.gather(*[self._bounded(c) for c in coros], return_exceptions=True)
         return list(results)
 
     async def update_members(self, updates: list[MemberUpdate]) -> list[Person | BaseException]:
@@ -1744,5 +1767,5 @@ class UserClient:
             )
             for u in updates
         ]
-        results = await asyncio.gather(*coros, return_exceptions=True)
+        results = await asyncio.gather(*[self._bounded(c) for c in coros], return_exceptions=True)
         return list(results)

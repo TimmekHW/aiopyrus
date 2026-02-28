@@ -14,6 +14,10 @@ from aiopyrus.types.webhook import BotResponse
 
 log = logging.getLogger("aiopyrus.dispatcher")
 
+# Max entries in the polling ``seen`` dict before evicting oldest ones.
+_SEEN_MAX = 10_000
+_SEEN_TRIM = 2_000  # remove this many in one pass to avoid trimming every iteration
+
 
 def _log_polling_error(exc: Exception, backoff: float) -> None:
     """Log a polling error — one-liner for known network/API issues,
@@ -300,6 +304,11 @@ class Dispatcher(Router):
                         except Exception:
                             log.exception("Handler error for task_id=%d", task.id)
 
+                    # Evict oldest entries to prevent unbounded memory growth
+                    if len(seen) > _SEEN_MAX:
+                        for k in list(seen)[:_SEEN_TRIM]:
+                            del seen[k]
+
                     if is_first_poll:
                         if skip_old:
                             log.info(
@@ -424,6 +433,11 @@ class Dispatcher(Router):
                             await self.process_event(payload, bot, middlewares=self._middlewares)
                         except Exception:
                             log.exception("Handler error for task_id=%d", task.id)
+
+                    # Evict oldest entries to prevent unbounded memory growth
+                    if len(seen) > _SEEN_MAX:
+                        for k in list(seen)[:_SEEN_TRIM]:
+                            del seen[k]
 
                     if is_first_poll:
                         if skip_old:
