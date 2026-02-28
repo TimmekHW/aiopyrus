@@ -43,7 +43,7 @@ class PyrusBot(UserClient):
         login: str,
         security_key: str,
         *,
-        timeout: float = 30.0,
+        timeout: float = 60.0,
         base_url: str | None = None,
         api_version: str = "v4",
         auth_url: str | None = None,

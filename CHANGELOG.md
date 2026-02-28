@@ -29,6 +29,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - **`SyncClient.close()`**: `try/finally` — event loop закрывается даже
   если `async close()` бросил исключение
 
+### Changed
+- **Default timeout**: 30s → 60s (рекомендация Pyrus для корпоративных инстансов)
+
 ---
 ## [0.4.0] — 2026-02-28
 

@@ -100,7 +100,7 @@ class UserClient:
         security_key: str,
         person_id: int | None = None,
         *,
-        timeout: float = 30.0,
+        timeout: float = 60.0,
         base_url: str | None = None,
         api_version: str = "v4",
         auth_url: str | None = None,
