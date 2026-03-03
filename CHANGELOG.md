@@ -5,6 +5,15 @@ All notable changes to **aiopyrus** will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
+## [0.6.1] — 2026-03-03
+
+### Fixed
+- **`__init__.py` missing from PyPI wheel**: `.gitignore` pattern `_*.py` was
+  matched by hatchling's `pathspec` against `__init__.py`, excluding all 8
+  `__init__.py` files from the built wheel. Result: `from aiopyrus import UserClient`
+  failed on clean `pip install` (Python 3.10–3.14). Added `!__init__.py` negation rule.
+
+---
 ## [0.6.0] — 2026-03-03
 
 ### Added
