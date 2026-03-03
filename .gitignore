@@ -33,4 +33,5 @@ htmlcov/
 test_live.py
 test_live_remote.py
 _*.py
+!__init__.py
 _*.txt
