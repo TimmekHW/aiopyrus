@@ -673,7 +673,9 @@ class TestGetValueId:
     def test_multiple_choice_single(self):
         """Returns single choice_id for multiple_choice with one selection."""
         field = make_field(
-            id=10, name="Status", type="multiple_choice",
+            id=10,
+            name="Status",
+            type="multiple_choice",
             value={"choice_ids": [3], "choice_names": ["In progress"]},
         )
         ctx = TaskContext(make_task(fields=[field]), AsyncMock())
@@ -682,7 +684,9 @@ class TestGetValueId:
     def test_multiple_choice_multi(self):
         """Returns list of choice_ids when multiple selections."""
         field = make_field(
-            id=10, name="Tags", type="multiple_choice",
+            id=10,
+            name="Tags",
+            type="multiple_choice",
             value={"choice_ids": [1, 5, 7], "choice_names": ["A", "B", "C"]},
         )
         ctx = TaskContext(make_task(fields=[field]), AsyncMock())
@@ -691,7 +695,9 @@ class TestGetValueId:
     def test_catalog(self):
         """Returns item_id for catalog field."""
         field = make_field(
-            id=5, name="Type", type="catalog",
+            id=5,
+            name="Type",
+            type="catalog",
             value={"item_id": 1001, "values": ["10", "Alpha"]},
         )
         ctx = TaskContext(make_task(fields=[field]), AsyncMock())
@@ -700,7 +706,9 @@ class TestGetValueId:
     def test_person(self):
         """Returns person_id for person field."""
         field = make_field(
-            id=8, name="Exec", type="person",
+            id=8,
+            name="Exec",
+            type="person",
             value={"id": 100500, "first_name": "Ivan", "last_name": "Ivanov"},
         )
         ctx = TaskContext(make_task(fields=[field]), AsyncMock())
@@ -709,7 +717,9 @@ class TestGetValueId:
     def test_form_link(self):
         """Returns task_ids for form_link field."""
         field = make_field(
-            id=20, name="Linked", type="form_link",
+            id=20,
+            name="Linked",
+            type="form_link",
             value={"task_ids": [111, 222]},
         )
         ctx = TaskContext(make_task(fields=[field]), AsyncMock())
@@ -737,7 +747,9 @@ class TestGetValueId:
     def test_value_id_alias_works(self):
         """value_id() is an alias for get_value_id()."""
         field = make_field(
-            id=5, name="Type", type="catalog",
+            id=5,
+            name="Type",
+            type="catalog",
             value={"item_id": 42, "values": ["Alpha"]},
         )
         ctx = TaskContext(make_task(fields=[field]), AsyncMock())
@@ -760,7 +772,9 @@ class TestDump:
     def test_dump_catalog_field(self):
         """dump() on catalog field returns the raw value dict."""
         field = make_field(
-            id=5, name="Type", type="catalog",
+            id=5,
+            name="Type",
+            type="catalog",
             value={"item_id": 1001, "values": ["10", "Alpha", "Web"]},
         )
         ctx = TaskContext(make_task(fields=[field]), AsyncMock())
@@ -994,9 +1008,7 @@ class TestResolveCatalog:
         field = make_field(id=5, name="Type", type="catalog", value={"item_id": 1})
         returned_task = make_task(id=42, form_id=321, fields=[field])
 
-        form_field = FormField(
-            id=5, name="Type", type=FieldType.catalog, info={"catalog_id": 99}
-        )
+        form_field = FormField(id=5, name="Type", type=FieldType.catalog, info={"catalog_id": 99})
         form = MagicMock()
         form.get_field = MagicMock(return_value=form_field)
 
@@ -1026,9 +1038,7 @@ class TestResolveCatalog:
         field = make_field(id=5, name="Type", type="catalog", value={"item_id": 1})
         returned_task = make_task(id=42, form_id=321, fields=[field])
 
-        form_field = FormField(
-            id=5, name="Type", type=FieldType.catalog, info={"catalog_id": 99}
-        )
+        form_field = FormField(id=5, name="Type", type=FieldType.catalog, info={"catalog_id": 99})
         form = MagicMock()
         form.get_field = MagicMock(return_value=form_field)
 
@@ -1074,9 +1084,7 @@ class TestResolveCatalog:
         """Unknown catalog value → ValueError with hints."""
         field = make_field(id=5, name="Type", type="catalog", value={"item_id": 1})
 
-        form_field = FormField(
-            id=5, name="Type", type=FieldType.catalog, info={"catalog_id": 99}
-        )
+        form_field = FormField(id=5, name="Type", type=FieldType.catalog, info={"catalog_id": 99})
         form = MagicMock()
         form.get_field = MagicMock(return_value=form_field)
 

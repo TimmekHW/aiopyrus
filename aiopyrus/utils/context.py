@@ -815,9 +815,7 @@ class TaskContext:
                 f"Use task.find_fields(name='{field_name}') to inspect."
             )
         if field.value is None:
-            raise ValueError(
-                f"Field {field_name!r} (id={field.id}) has no value (None)."
-            )
+            raise ValueError(f"Field {field_name!r} (id={field.id}) has no value (None).")
         ftype = field.type.value if field.type else None
 
         if ftype == "multiple_choice":
@@ -911,14 +909,10 @@ class TaskContext:
             )
         ftype = field.type.value if field.type else None
         if ftype != "catalog":
-            raise TypeError(
-                f"Field {field_name!r} (id={field.id}) is {ftype!r}, not 'catalog'."
-            )
+            raise TypeError(f"Field {field_name!r} (id={field.id}) is {ftype!r}, not 'catalog'.")
         form_id = self._task.form_id
         if form_id is None:
-            raise ValueError(
-                f"Task {self._task.id} has no form_id — cannot resolve catalog_id."
-            )
+            raise ValueError(f"Task {self._task.id} has no form_id — cannot resolve catalog_id.")
         form = await self._client.get_form(form_id)
         form_field = form.get_field(field.id)
         cid = (
@@ -928,8 +922,7 @@ class TaskContext:
         )
         if cid is None:
             raise ValueError(
-                f"catalog_id not found in form definition for field "
-                f"{field.id} ({field_name!r})."
+                f"catalog_id not found in form definition for field {field.id} ({field_name!r})."
             )
         return cid
 
