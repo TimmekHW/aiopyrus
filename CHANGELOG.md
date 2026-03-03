@@ -5,6 +5,37 @@ All notable changes to **aiopyrus** will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
+## [0.6.0] — 2026-03-03
+
+### Added
+- **Catalog string resolution**: `ctx.fill("Тип запроса", "Программа / Веб-ресурс")`
+  — строки для catalog-полей автоматически резолвятся в `item_id` через 6-проходный
+  поиск (точный, по колонке, по частям, case-insensitive варианты)
+- **`get_id(field_name)`**: получить числовой ID поля по имени из интерфейса
+- **`get_type(field_name)`**: получить тип поля (`"text"`, `"catalog"`, `"multiple_choice"`, …)
+- **`get_value_id(field_name)`**: получить ID текущего значения —
+  `choice_id` для multiple_choice, `item_id` для catalog, `person_id` для person,
+  `task_ids` для form_link
+- **`get_catalog_id(field_name)`**: получить ID каталога из определения формы
+- **`dump(field_name)`**: поле как dict (JSON); `dump()` без аргументов — вся задача
+- **`find(pattern, default)`**: поиск поля по паттерну имени (`%описание%`)
+
+### Changed
+- **`set()` → `fill()`**: основной метод записи переименован в `fill()` —
+  лучше отражает «заполнить поле формы». `set()` и `put()` работают как алиасы
+- **Method aliases**: все getter-методы имеют синонимы —
+  `field_id`=`get_id`, `field_type`=`get_type`, `value_id`=`get_value_id`,
+  `catalog_id`=`get_catalog_id`
+- **`__version__`**: автосинхронизация с `pyproject.toml` через `importlib.metadata`
+  вместо хардкода
+
+---
+## [0.5.1] — 2026-03-01
+
+### Changed
+- **Default timeout**: 30s → 60s (рекомендация Pyrus для корпоративных инстансов)
+
+---
 ## [0.5.0] — 2026-02-28
 
 ### Added
@@ -28,9 +59,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
   с автоматическим удалением самых старых (раньше рос бесконечно в 24/7 ботах)
 - **`SyncClient.close()`**: `try/finally` — event loop закрывается даже
   если `async close()` бросил исключение
-
-### Changed
-- **Default timeout**: 30s → 60s (рекомендация Pyrus для корпоративных инстансов)
 
 ---
 ## [0.4.0] — 2026-02-28

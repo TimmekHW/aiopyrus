@@ -22,17 +22,21 @@ Method reference / Справочник методов
 
 .. code-block:: python
 
-    ctx.set("Status",   "In progress")    # multiple_choice: name → choice_id auto
-    ctx.set("Executor", "john.doe")       # person: name/login/email → person_id auto
-    ctx.set("Notes",    "updated text")   # text: passed through
-    ctx.set("Checkbox", True)             # checkmark / flag
-    ctx.set("Field",    None)             # clear the field / очистить поле
-    ctx.discard()                         # drop all uncommitted set()-s
+    ctx.fill("Status",   "In progress")    # multiple_choice: name → choice_id auto
+    ctx.fill("Executor", "john.doe")       # person: name/login/email → person_id auto
+    ctx.fill("Notes",    "updated text")   # text: passed through
+    ctx.fill("Checkbox", True)             # checkmark / flag
+    ctx.fill("Field",    None)             # clear the field / очистить поле
+    ctx.discard()                          # drop all uncommitted fill()-s
 
     # Chaining / Чейнинг
-    ctx.set("Status", "In progress").set("Executor", "john.doe")
+    ctx.fill("Status", "In progress").fill("Executor", "john.doe")
 
-**Sending (flushes accumulated set()-s) / Отправка (сбрасывает set()-ы)**
+    # Aliases: ctx.set() and ctx.put() work too
+    ctx.set("Status", "In progress")
+    ctx.put("Status", "In progress")
+
+**Sending (flushes accumulated fill()-s) / Отправка (сбрасывает fill()-ы)**
 
 .. code-block:: python
 
@@ -65,6 +69,23 @@ Method reference / Справочник методов
 
     await ctx.reply(comment.id, "Please clarify")
 
+**Introspection — IDs, types, raw data / Интроспекция**
+
+.. code-block:: python
+
+    ctx.get_id("Статус задачи")              # → 5  (field ID)
+    ctx.get_type("Статус задачи")            # → "multiple_choice"
+    ctx.get_value_id("Статус задачи")        # → 3  (choice_id of current value)
+    ctx.get_value_id("Тип запроса")          # → 11148054  (item_id)
+    ctx.get_value_id("Исполнитель")          # → 100500  (person_id)
+    await ctx.get_catalog_id("Тип запроса")  # → 1910  (catalog ID from form)
+
+    ctx.raw("Тип запроса")     # → FormField pydantic object
+    ctx.dump("Тип запроса")    # → dict (JSON-like) of the field
+    ctx.dump()                 # → dict of the entire task
+
+    # Aliases / Алиасы: field_id, field_type, value_id, catalog_id
+
 **Properties / Свойства**
 
 .. code-block:: python
@@ -85,11 +106,11 @@ Full flow example / Пример полного флоу::
         description  = ctx["Описание"]
 
         # Take to work
-        ctx.set("Статус задачи", "В работе").set("Исполнитель", "ivanov")
+        ctx.fill("Статус задачи", "В работе").fill("Исполнитель", "ivanov")
         await ctx.answer(f"Accepted. Type: {problem_type}")
 
         # Process and close
-        ctx.set("Статус задачи", "Выполнена").set("Номер кейса", "INC-001")
+        ctx.fill("Статус задачи", "Выполнена").fill("Номер кейса", "INC-001")
         await ctx.approve("Processing complete")
 """
 
@@ -104,10 +125,86 @@ from aiopyrus.types.task import ApprovalChoice, Task, TaskAction
 from aiopyrus.utils.fields import FieldUpdate
 
 if TYPE_CHECKING:
+    from aiopyrus.types.catalog import CatalogItem
     from aiopyrus.types.form import FormField
     from aiopyrus.user.client import UserClient
 
 log = logging.getLogger("aiopyrus.context")
+
+
+# ---------------------------------------------------------------------------
+# Catalog item search helper
+# ---------------------------------------------------------------------------
+
+
+def _catalog_display(values: list[str]) -> str:
+    """Build display text for a catalog item (same logic as _read_field)."""
+    human = [v for v in values if v and not v.strip().lstrip("-").isdigit()]
+    if not human:
+        return ""
+    return " / ".join(human) if len(human) > 1 else human[0]
+
+
+def _find_catalog_item(items: list[CatalogItem], text: str) -> CatalogItem | None:
+    """Search catalog items by display text or column value.
+
+    Matching order:
+    1. Exact display text (non-numeric columns joined with " / ").
+    2. Exact match on any individual column value.
+    3. All " / "-separated parts found among item's column values.
+    4. Case-insensitive versions of 1–3.
+    """
+    text_stripped = text.strip()
+    text_lower = text_stripped.lower()
+
+    # Pass 1: exact display text
+    for item in items:
+        if item.deleted:
+            continue
+        if _catalog_display(item.values) == text_stripped:
+            return item
+
+    # Pass 2: exact match on any single column value
+    for item in items:
+        if item.deleted:
+            continue
+        if text_stripped in item.values:
+            return item
+
+    # Pass 3: all user-provided parts found among columns
+    parts = [p.strip() for p in text_stripped.split(" / ") if p.strip()]
+    if len(parts) > 1:
+        for item in items:
+            if item.deleted:
+                continue
+            if all(p in item.values for p in parts):
+                return item
+
+    # Pass 4: case-insensitive display text
+    for item in items:
+        if item.deleted:
+            continue
+        if _catalog_display(item.values).lower() == text_lower:
+            return item
+
+    # Pass 5: case-insensitive column value
+    for item in items:
+        if item.deleted:
+            continue
+        if any(v.lower() == text_lower for v in item.values if v):
+            return item
+
+    # Pass 6: case-insensitive parts matching
+    if len(parts) > 1:
+        parts_lower = [p.lower() for p in parts]
+        for item in items:
+            if item.deleted:
+                continue
+            vals_lower = [v.lower() for v in item.values if v]
+            if all(p in vals_lower for p in parts_lower):
+                return item
+
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -229,36 +326,50 @@ class TaskContext:
     Use field names exactly as they appear in the Pyrus UI —
     no IDs, no type codes, no manual payload construction.
 
-    +------------------------------------+------------------------------------------+
-    | Read / Чтение                      | ``ctx["Field"]``, ``ctx.get("Field")``   |
-    +------------------------------------+------------------------------------------+
-    | Write (lazy) / Запись (ленивая)    | ``ctx.set("Field", value)``              |
-    +------------------------------------+------------------------------------------+
-    | Comment + flush / Комментарий      | ``await ctx.answer("text")``             |
-    +------------------------------------+------------------------------------------+
-    | Approve step / Утвердить шаг       | ``await ctx.approve("text")``            |
-    +------------------------------------+------------------------------------------+
-    | Reject step / Отклонить шаг        | ``await ctx.reject("text")``             |
-    +------------------------------------+------------------------------------------+
-    | Finish task / Завершить задачу     | ``await ctx.finish("text")``             |
-    +------------------------------------+------------------------------------------+
-    | Reassign / Переназначить           | ``await ctx.reassign("Jane Smith")``     |
-    +------------------------------------+------------------------------------------+
-    | Log time / Трекинг времени         | ``await ctx.log_time(90, "text")``       |
-    +------------------------------------+------------------------------------------+
-    | Reply to comment / Ответить        | ``await ctx.reply(comment_id, "text")``  |
-    +------------------------------------+------------------------------------------+
+    +---------------------------------------+----------------------------------------------+
+    | Read / Чтение                         | ``ctx["Field"]``, ``ctx.get("Field")``       |
+    +---------------------------------------+----------------------------------------------+
+    | Find / Поиск                          | ``ctx.find("%pattern%")``                    |
+    +---------------------------------------+----------------------------------------------+
+    | Raw object / Объект                   | ``ctx.raw("Field")``                         |
+    +---------------------------------------+----------------------------------------------+
+    | Raw dict (JSON)                       | ``ctx.dump("Field")`` / ``ctx.dump()``       |
+    +---------------------------------------+----------------------------------------------+
+    | Write (lazy) / Запись (ленивая)       | ``ctx.fill()`` / ``set()`` / ``put()``       |
+    +---------------------------------------+----------------------------------------------+
+    | Field ID / ID поля                    | ``ctx.get_id("Field")``                      |
+    +---------------------------------------+----------------------------------------------+
+    | Field type / Тип поля                 | ``ctx.get_type("Field")``                    |
+    +---------------------------------------+----------------------------------------------+
+    | Value ID / ID значения                | ``ctx.get_value_id("Field")``                |
+    +---------------------------------------+----------------------------------------------+
+    | Catalog ID / ID каталога              | ``await ctx.get_catalog_id("Field")``        |
+    +---------------------------------------+----------------------------------------------+
+    | Comment + flush / Комментарий         | ``await ctx.answer("text")``                 |
+    +---------------------------------------+----------------------------------------------+
+    | Approve step / Утвердить шаг          | ``await ctx.approve("text")``                |
+    +---------------------------------------+----------------------------------------------+
+    | Reject step / Отклонить шаг           | ``await ctx.reject("text")``                 |
+    +---------------------------------------+----------------------------------------------+
+    | Finish task / Завершить задачу        | ``await ctx.finish("text")``                 |
+    +---------------------------------------+----------------------------------------------+
+    | Reassign / Переназначить              | ``await ctx.reassign("Jane Smith")``         |
+    +---------------------------------------+----------------------------------------------+
+    | Log time / Трекинг времени            | ``await ctx.log_time(90, "text")``           |
+    +---------------------------------------+----------------------------------------------+
+    | Reply to comment / Ответить           | ``await ctx.reply(comment_id, "text")``      |
+    +---------------------------------------+----------------------------------------------+
 
-    ``set()`` returns *self* — chainable / возвращает self для чейнинга::
+    ``fill()`` / ``set()`` / ``put()`` return *self* — chainable::
 
-        ctx.set("Статус задачи", "В работе").set("Исполнитель", "ivanov")
+        ctx.fill("Статус задачи", "В работе").fill("Исполнитель", "ivanov")
+        ctx.set("Статус задачи", "В работе")   # alias / алиас
+        ctx.put("Статус задачи", "В работе")   # alias / алиас
         await ctx.answer()
 
-    All ``set()``-s are flushed in a single API call on the next
+    All pending writes are flushed in a single API call on the next
     ``answer()`` / ``approve()`` / ``finish()`` / ``reject()`` /
     ``reassign()`` / ``log_time()`` / ``reply()``.
-
-    Все ``set()``-ы отправляются одним вызовом при следующей отправке.
     """
 
     def __init__(self, task: Task, client: UserClient) -> None:
@@ -334,8 +445,11 @@ class TaskContext:
     # Writing (lazy — applied on the next answer/approve/finish/reject)
     # ------------------------------------------------------------------
 
-    def set(self, field_name: str, value: Any) -> TaskContext:
-        """Schedule a field update (lazy — sent on the next answer/approve/etc.).
+    def fill(self, field_name: str, value: Any) -> TaskContext:
+        """Fill a field — schedule update (lazy, sent on next answer/approve/etc.).
+
+        Заполнить поле — отложенная запись, отправится при следующем
+        ``answer()`` / ``approve()`` / ``reject()`` / ``finish()``.
 
         String values are resolved to IDs automatically:
 
@@ -343,14 +457,21 @@ class TaskContext:
           String → choice_id looked up via the form API.
         - **person / author**  — name, login, or email, or int person_id.
           String → person_id looked up via the contacts API.
+        - **catalog**          — display text or column value, or int item_id.
+          String → item_id looked up via the catalog API.
         - **text / number / …** — passed through as-is.
         - **checkmark / flag**  — ``True`` / ``False``.
         - ``None``              — clears the field.
 
+        Example::
+
+            ctx.fill("Статус задачи", "В работе").fill("Исполнитель", "ivanov")
+            await ctx.answer("Принято в работу")
+
         Raises:
             KeyError:   field not found in this task.
             ValueError: value incompatible with field type (raised on flush,
-                        not at the ``set()`` call site).
+                        not at the ``fill()`` call site).
 
         Returns *self* for chaining.
         """
@@ -363,8 +484,12 @@ class TaskContext:
         self._pending.append((field, value))
         return self
 
+    # Aliases — ctx.set() and ctx.put() work too
+    set = fill
+    put = fill
+
     def discard(self) -> TaskContext:
-        """Drop all uncommitted ``set()``-s without sending them."""
+        """Drop all uncommitted ``fill()``-s without sending them."""
         self._pending.clear()
         return self
 
@@ -613,6 +738,204 @@ class TaskContext:
         """Form ID, or ``None`` if this is a free (non-form) task."""
         return self._task.form_id
 
+    def get_id(self, field_name: str) -> int:
+        """Return the numeric ID of a field by its UI name.
+
+        Получить числовой ID поля по имени из интерфейса Pyrus.
+
+        Example::
+
+            fid = ctx.get_id("Тип запроса")     # → 5
+            ftype = ctx.get_type("Тип запроса")  # → "catalog"
+
+        Raises:
+            KeyError: field not found in this task.
+        """
+        field = self._task.get_field(field_name)
+        if field is None:
+            raise KeyError(
+                f"Field {field_name!r} not found in task {self._task.id}. "
+                f"Use task.find_fields(name='{field_name}') to inspect."
+            )
+        return field.id
+
+    def get_type(self, field_name: str) -> str:
+        """Return the type of a field by its UI name.
+
+        Получить тип поля по имени из интерфейса Pyrus.
+
+        Common types: ``text``, ``multiple_choice``, ``catalog``,
+        ``checkmark``, ``person``, ``number``, ``date``, ``note``, ``file``.
+
+        Example::
+
+            ctx.get_type("Статус задачи")  # → "multiple_choice"
+            ctx.get_type("Тип запроса")    # → "catalog"
+            ctx.get_type("Описание")       # → "text"
+
+        Raises:
+            KeyError: field not found in this task.
+        """
+        field = self._task.get_field(field_name)
+        if field is None:
+            raise KeyError(
+                f"Field {field_name!r} not found in task {self._task.id}. "
+                f"Use task.find_fields(name='{field_name}') to inspect."
+            )
+        return field.type.value if field.type else "unknown"
+
+    def get_value_id(self, field_name: str) -> int | list[int]:
+        """Return the ID of the current value inside a field.
+
+        Получить ID текущего значения поля.
+
+        Works for:
+
+        - **multiple_choice** → ``choice_id`` (int) or list of ``choice_ids``
+        - **catalog**         → ``item_id`` (int)
+        - **person / author** → ``person_id`` (int)
+        - **form_link**       → list of linked ``task_ids``
+
+        Example::
+
+            ctx.get_value_id("Статус задачи")   # → 3  (choice_id)
+            ctx.get_value_id("Тип запроса")      # → 11148054  (item_id)
+            ctx.get_value_id("Исполнитель")      # → 100500  (person_id)
+
+        Raises:
+            KeyError:  field not found in this task.
+            TypeError: field type does not have an internal ID
+                       (e.g. text, number, date).
+            ValueError: field value is empty (None).
+        """
+        field = self._task.get_field(field_name)
+        if field is None:
+            raise KeyError(
+                f"Field {field_name!r} not found in task {self._task.id}. "
+                f"Use task.find_fields(name='{field_name}') to inspect."
+            )
+        if field.value is None:
+            raise ValueError(
+                f"Field {field_name!r} (id={field.id}) has no value (None)."
+            )
+        ftype = field.type.value if field.type else None
+
+        if ftype == "multiple_choice":
+            mc = field.as_multiple_choice()
+            if mc and mc.choice_ids:
+                return mc.choice_ids[0] if len(mc.choice_ids) == 1 else mc.choice_ids
+            raise ValueError(f"Field {field_name!r} has no choice_ids.")
+
+        if ftype == "catalog":
+            cat = field.as_catalog()
+            if cat and cat.item_id is not None:
+                return cat.item_id
+            raise ValueError(f"Field {field_name!r} has no item_id.")
+
+        if ftype in ("person", "author"):
+            p = field.as_person()
+            if p and p.id:
+                return p.id
+            raise ValueError(f"Field {field_name!r} has no person_id.")
+
+        if ftype == "form_link":
+            fl = field.as_form_link()
+            if fl and fl.task_ids:
+                return fl.task_ids
+            raise ValueError(f"Field {field_name!r} has no task_ids.")
+
+        raise TypeError(
+            f"Field {field_name!r} (type={ftype!r}) does not have "
+            f"an internal ID. Use ctx.raw({field_name!r}) for the "
+            f"raw FormField object."
+        )
+
+    # Alias
+    value_id = get_value_id
+
+    def dump(self, field_name: str | None = None) -> dict:
+        """Return raw JSON-like dict of a field or the entire task.
+
+        Получить «сырые» данные поля или задачи целиком в виде dict.
+
+        - ``ctx.dump("Поле")`` → dict of that field (id, name, type, value, …)
+        - ``ctx.dump()``       → dict of the entire task (all fields, comments, …)
+
+        Example::
+
+            ctx.dump("Тип запроса")
+            # → {'id': 5, 'type': 'catalog', 'name': 'Тип запроса',
+            #    'value': {'item_id': 123, 'values': ['10', 'Alpha', 'Web'], ...}}
+
+            ctx.dump()  # → full task dict
+        """
+        if field_name is None:
+            return self._task.model_dump(mode="python")
+        field = self._task.get_field(field_name)
+        if field is None:
+            raise KeyError(
+                f"Field {field_name!r} not found in task {self._task.id}. "
+                f"Use task.find_fields(name='{field_name}') to inspect."
+            )
+        return field.model_dump(mode="python")
+
+    # Aliases — both names work / Оба имени работают
+    field_id = get_id
+    field_type = get_type
+
+    async def get_catalog_id(self, field_name: str) -> int:
+        """Return the catalog ID linked to a catalog-type field.
+
+        Получить ID каталога, привязанного к полю типа ``catalog``.
+
+        Fetches the form definition to resolve the catalog reference
+        (catalog_id is not available in the task response, only in the form).
+
+        Example::
+
+            cat_id = await ctx.get_catalog_id("Тип запроса")  # → 1910
+            catalog = await client.get_catalog(cat_id)
+            for item in catalog.items:
+                print(item.item_id, item.values[:3])
+
+        Raises:
+            KeyError:  field not found in this task.
+            TypeError: field is not a catalog field.
+            ValueError: catalog_id could not be resolved from the form definition.
+        """
+        field = self._task.get_field(field_name)
+        if field is None:
+            raise KeyError(
+                f"Field {field_name!r} not found in task {self._task.id}. "
+                f"Use task.find_fields(name='{field_name}') to inspect."
+            )
+        ftype = field.type.value if field.type else None
+        if ftype != "catalog":
+            raise TypeError(
+                f"Field {field_name!r} (id={field.id}) is {ftype!r}, not 'catalog'."
+            )
+        form_id = self._task.form_id
+        if form_id is None:
+            raise ValueError(
+                f"Task {self._task.id} has no form_id — cannot resolve catalog_id."
+            )
+        form = await self._client.get_form(form_id)
+        form_field = form.get_field(field.id)
+        cid = (
+            form_field.info.get("catalog_id")
+            if form_field and isinstance(form_field.info, dict)
+            else None
+        )
+        if cid is None:
+            raise ValueError(
+                f"catalog_id not found in form definition for field "
+                f"{field.id} ({field_name!r})."
+            )
+        return cid
+
+    # Alias
+    catalog_id = get_catalog_id
+
     def pending_count(self) -> int:
         """Number of uncommitted ``set()``-s waiting to be flushed."""
         return len(self._pending)
@@ -715,7 +1038,7 @@ class TaskContext:
             raise ValueError(
                 f"{action}() was accepted by the server, but step {step} did not advance.\n"
                 f"Required fields not filled / Не заполнены обязательные поля:\n{fields_str}\n\n"
-                f"Use ctx.set(name, value) before calling {action}()."
+                f"Use ctx.fill(name, value) before calling {action}()."
             )
 
         # ── 3. Unknown reason ──────────────────────────────────────────────
@@ -769,6 +1092,45 @@ class TaskContext:
                     f"Try: await client.find_members('{value}') to see all candidates."
                 )
             return FieldUpdate.person(field.id, person.id)
+
+        # --- catalog: accept str (display text / column value) → auto lookup ---
+        if ftype == "catalog" and isinstance(value, str):
+            form_id = self._task.form_id
+            if form_id is None:
+                raise ValueError(
+                    f"Cannot resolve catalog value {value!r}: task has no form_id "
+                    f"(it's a free task, not a form task). Pass item_id as int."
+                )
+            # catalog_id lives in the form definition, not in the task field
+            form = await self._client.get_form(form_id)
+            form_field = form.get_field(field.id)
+            catalog_id = (
+                form_field.info.get("catalog_id")
+                if form_field and isinstance(form_field.info, dict)
+                else None
+            )
+            if catalog_id is None:
+                raise ValueError(
+                    f"Cannot resolve catalog value {value!r}: catalog_id not found "
+                    f"for field {field.id} ({field.name!r}). Pass item_id as int."
+                )
+            catalog = await self._client.get_catalog(catalog_id)
+            item = _find_catalog_item(catalog.items, value)
+            if item is None:
+                # Show first few items as hints
+                hints: list[str] = []
+                for it in catalog.items[:10]:
+                    h = [v for v in it.values if v and not v.strip().lstrip("-").isdigit()]
+                    if h:
+                        hints.append(" / ".join(h[:3]))
+                hint_str = ", ".join(f"'{h}'" for h in hints)
+                raise ValueError(
+                    f"Catalog item {value!r} not found in catalog "
+                    f"{catalog.name!r} (id={catalog_id}, {len(catalog.items)} items).\n"
+                    f"Examples: {hint_str}\n"
+                    f"Pass item_id as int to set by ID."
+                )
+            return FieldUpdate.catalog(field.id, item.item_id)
 
         # --- everything else: delegate to typed FieldUpdate factory ---
         return FieldUpdate.from_field(field, value)

@@ -18,7 +18,7 @@ Quick start / Быстрый старт
         async with UserClient(login="user@example.com", security_key="KEY") as client:
             ctx = await client.task_context(12345678)
             status = ctx["Статус задачи"]   # → "Открыта"
-            ctx.set("Статус задачи", "В работе")
+            ctx.fill("Статус задачи", "В работе")
             await ctx.answer("Принято в работу")
 
     asyncio.run(main())
@@ -48,7 +48,7 @@ Quick start / Быстрый старт
         if amount > 100_000:
             await ctx.reject("Сумма превышает лимит — отклонено.")
         else:
-            ctx.set("Статус задачи", "Одобрено")
+            ctx.fill("Статус задачи", "Одобрено")
             await ctx.approve("Одобрено автоматически.")
 
     dp.include_router(router)
@@ -61,31 +61,49 @@ TaskContext — method reference / Справочник методов
 
 Full docs: ``aiopyrus.utils.context`` (module docstring).
 
-+-----------------------------------+---------------------------------------+
-| Method / Метод                    | Description / Описание                |
-+===================================+=======================================+
-| ``ctx["Field"]``                  | Read field value (human-readable)     |
-+-----------------------------------+---------------------------------------+
-| ``ctx.get("Field", default)``     | Read with default / с дефолтом        |
-+-----------------------------------+---------------------------------------+
-| ``ctx.set("Field", value)``       | Schedule write (lazy) / ленивая       |
-+-----------------------------------+---------------------------------------+
-| ``ctx.discard()``                 | Drop uncommitted set()-s              |
-+-----------------------------------+---------------------------------------+
-| ``await ctx.answer("text")``      | Comment + flush all set()-s           |
-+-----------------------------------+---------------------------------------+
-| ``await ctx.approve("text")``     | Approve approval step / утвердить     |
-+-----------------------------------+---------------------------------------+
-| ``await ctx.reject("text")``      | Reject approval step / отклонить      |
-+-----------------------------------+---------------------------------------+
-| ``await ctx.finish("text")``      | Finish the task / завершить задачу    |
-+-----------------------------------+---------------------------------------+
-| ``await ctx.reassign("Name")``    | Reassign (string → person_id auto)    |
-+-----------------------------------+---------------------------------------+
-| ``await ctx.log_time(min)``       | Log time spent / трекинг времени      |
-+-----------------------------------+---------------------------------------+
-| ``await ctx.reply(id, "text")``   | Reply to a comment / ответить         |
-+-----------------------------------+---------------------------------------+
++--------------------------------------------+-----------------------------------------------+
+| Method / Метод                             | Description / Описание                        |
++============================================+===============================================+
+| ``ctx["Field"]``                           | Read field value (human-readable)              |
++--------------------------------------------+-----------------------------------------------+
+| ``ctx.get("Field", default)``              | Read with default / с дефолтом                 |
++--------------------------------------------+-----------------------------------------------+
+| ``ctx.find("%pattern%", default)``         | Fuzzy find by name / поиск по имени            |
++--------------------------------------------+-----------------------------------------------+
+| ``ctx.raw("Field")``                       | Raw FormField pydantic object                  |
++--------------------------------------------+-----------------------------------------------+
+| ``ctx.dump("Field")``                      | Field as dict (JSON) / поле как dict           |
++--------------------------------------------+-----------------------------------------------+
+| ``ctx.dump()``                             | Entire task as dict / задача как dict           |
++--------------------------------------------+-----------------------------------------------+
+| ``ctx.fill("Field", value)``               | Schedule write (lazy) / ленивая запись          |
++--------------------------------------------+-----------------------------------------------+
+| aliases: ``set()`` / ``put()``             | Same as fill() / то же что fill()              |
++--------------------------------------------+-----------------------------------------------+
+| ``ctx.discard()``                          | Drop uncommitted fill()-s                      |
++--------------------------------------------+-----------------------------------------------+
+| ``ctx.get_id("Field")``                    | Field ID / числовой ID поля                    |
++--------------------------------------------+-----------------------------------------------+
+| ``ctx.get_type("Field")``                  | Field type / тип поля (text, catalog, …)       |
++--------------------------------------------+-----------------------------------------------+
+| ``ctx.get_value_id("Field")``              | Value ID (choice_id / item_id / person_id)     |
++--------------------------------------------+-----------------------------------------------+
+| ``await ctx.get_catalog_id("Field")``      | Catalog ID from form / ID каталога              |
++--------------------------------------------+-----------------------------------------------+
+| ``await ctx.answer("text")``               | Comment + flush all pending writes              |
++--------------------------------------------+-----------------------------------------------+
+| ``await ctx.approve("text")``              | Approve approval step / утвердить               |
++--------------------------------------------+-----------------------------------------------+
+| ``await ctx.reject("text")``               | Reject approval step / отклонить                |
++--------------------------------------------+-----------------------------------------------+
+| ``await ctx.finish("text")``               | Finish the task / завершить задачу              |
++--------------------------------------------+-----------------------------------------------+
+| ``await ctx.reassign("Name")``             | Reassign (string → person_id auto)              |
++--------------------------------------------+-----------------------------------------------+
+| ``await ctx.log_time(min)``                | Log time spent / трекинг времени                |
++--------------------------------------------+-----------------------------------------------+
+| ``await ctx.reply(id, "text")``            | Reply to a comment / ответить                   |
++--------------------------------------------+-----------------------------------------------+
 """
 
 from .bot.bot import PyrusBot
@@ -112,6 +130,7 @@ from .exceptions import (
     PyrusRateLimitError,
     PyrusWebhookSignatureError,
 )
+from .sync import SyncClient
 from .testing import create_mock_client
 from .types import (
     Announcement,
@@ -153,12 +172,16 @@ from .types import (
     UploadedFile,
     WebhookPayload,
 )
-from .sync import SyncClient
 from .user.client import UserClient
 from .utils.context import TaskContext
 from .utils.fields import FieldUpdate, format_mention, get_flat_fields, select_fields
 
-__version__ = "0.3.0"
+try:
+    from importlib.metadata import version as _pkg_version
+
+    __version__ = _pkg_version("aiopyrus")
+except Exception:  # noqa: BLE001
+    __version__ = "0.0.0"
 _CODENAME = "Перезрелая груша с кривым API"  # 🍐
 __all__ = [
     # Clients & context

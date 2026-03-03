@@ -8,13 +8,16 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from aiopyrus.types.catalog import Catalog, CatalogItem
 from aiopyrus.types.form import FieldType, FormField
 from aiopyrus.types.task import ApprovalChoice, ApprovalEntry, TaskAction
 from aiopyrus.types.user import Person
 from aiopyrus.utils.context import (
     TaskContext,
+    _catalog_display,
     _collect_required_missing,
     _collect_task_values,
+    _find_catalog_item,
     _read_field,
 )
 
@@ -637,3 +640,467 @@ class TestContextAliases:
     def test_send_is_answer(self):
         """send is a class-level alias for answer."""
         assert TaskContext.send is TaskContext.answer
+
+    def test_set_is_fill(self):
+        """set is a class-level alias for fill."""
+        assert TaskContext.set is TaskContext.fill
+
+    def test_field_id_is_get_id(self):
+        """field_id is a class-level alias for get_id."""
+        assert TaskContext.field_id is TaskContext.get_id
+
+    def test_field_type_is_get_type(self):
+        """field_type is a class-level alias for get_type."""
+        assert TaskContext.field_type is TaskContext.get_type
+
+    def test_catalog_id_is_get_catalog_id(self):
+        """catalog_id is a class-level alias for get_catalog_id."""
+        assert TaskContext.catalog_id is TaskContext.get_catalog_id
+
+    def test_put_is_fill(self):
+        """put is a class-level alias for fill."""
+        assert TaskContext.put is TaskContext.fill
+
+    def test_value_id_is_get_value_id(self):
+        """value_id is a class-level alias for get_value_id."""
+        assert TaskContext.value_id is TaskContext.get_value_id
+
+
+# ── ctx.get_value_id ──────────────────────────────────────────
+
+
+class TestGetValueId:
+    def test_multiple_choice_single(self):
+        """Returns single choice_id for multiple_choice with one selection."""
+        field = make_field(
+            id=10, name="Status", type="multiple_choice",
+            value={"choice_ids": [3], "choice_names": ["In progress"]},
+        )
+        ctx = TaskContext(make_task(fields=[field]), AsyncMock())
+        assert ctx.get_value_id("Status") == 3
+
+    def test_multiple_choice_multi(self):
+        """Returns list of choice_ids when multiple selections."""
+        field = make_field(
+            id=10, name="Tags", type="multiple_choice",
+            value={"choice_ids": [1, 5, 7], "choice_names": ["A", "B", "C"]},
+        )
+        ctx = TaskContext(make_task(fields=[field]), AsyncMock())
+        assert ctx.get_value_id("Tags") == [1, 5, 7]
+
+    def test_catalog(self):
+        """Returns item_id for catalog field."""
+        field = make_field(
+            id=5, name="Type", type="catalog",
+            value={"item_id": 1001, "values": ["10", "Alpha"]},
+        )
+        ctx = TaskContext(make_task(fields=[field]), AsyncMock())
+        assert ctx.get_value_id("Type") == 1001
+
+    def test_person(self):
+        """Returns person_id for person field."""
+        field = make_field(
+            id=8, name="Exec", type="person",
+            value={"id": 100500, "first_name": "Ivan", "last_name": "Ivanov"},
+        )
+        ctx = TaskContext(make_task(fields=[field]), AsyncMock())
+        assert ctx.get_value_id("Exec") == 100500
+
+    def test_form_link(self):
+        """Returns task_ids for form_link field."""
+        field = make_field(
+            id=20, name="Linked", type="form_link",
+            value={"task_ids": [111, 222]},
+        )
+        ctx = TaskContext(make_task(fields=[field]), AsyncMock())
+        assert ctx.get_value_id("Linked") == [111, 222]
+
+    def test_text_raises_type_error(self):
+        """Text fields don't have an internal ID → TypeError."""
+        field = make_field(id=1, name="Note", type="text", value="hello")
+        ctx = TaskContext(make_task(fields=[field]), AsyncMock())
+        with pytest.raises(TypeError, match="does not have"):
+            ctx.get_value_id("Note")
+
+    def test_none_value_raises_value_error(self):
+        """Empty field → ValueError."""
+        field = make_field(id=1, name="Status", type="multiple_choice", value=None)
+        ctx = TaskContext(make_task(fields=[field]), AsyncMock())
+        with pytest.raises(ValueError, match="no value"):
+            ctx.get_value_id("Status")
+
+    def test_missing_field_raises_key_error(self):
+        ctx = TaskContext(make_task(fields=[]), AsyncMock())
+        with pytest.raises(KeyError, match="Missing"):
+            ctx.get_value_id("Missing")
+
+    def test_value_id_alias_works(self):
+        """value_id() is an alias for get_value_id()."""
+        field = make_field(
+            id=5, name="Type", type="catalog",
+            value={"item_id": 42, "values": ["Alpha"]},
+        )
+        ctx = TaskContext(make_task(fields=[field]), AsyncMock())
+        assert ctx.value_id("Type") == 42
+
+
+# ── ctx.dump ──────────────────────────────────────────────────
+
+
+class TestDump:
+    def test_dump_field(self):
+        """dump('Field') returns dict with id, name, type, value."""
+        field = make_field(id=10, name="Status", type="text", value="Open")
+        ctx = TaskContext(make_task(fields=[field]), AsyncMock())
+        d = ctx.dump("Status")
+        assert d["id"] == 10
+        assert d["name"] == "Status"
+        assert d["value"] == "Open"
+
+    def test_dump_catalog_field(self):
+        """dump() on catalog field returns the raw value dict."""
+        field = make_field(
+            id=5, name="Type", type="catalog",
+            value={"item_id": 1001, "values": ["10", "Alpha", "Web"]},
+        )
+        ctx = TaskContext(make_task(fields=[field]), AsyncMock())
+        d = ctx.dump("Type")
+        assert d["value"]["item_id"] == 1001
+        assert d["value"]["values"] == ["10", "Alpha", "Web"]
+
+    def test_dump_whole_task(self):
+        """dump() with no args returns the entire task as dict."""
+        field = make_field(id=1, name="X", type="text", value="Y")
+        ctx = TaskContext(make_task(id=42, fields=[field]), AsyncMock())
+        d = ctx.dump()
+        assert d["id"] == 42
+        assert isinstance(d["fields"], list)
+
+    def test_dump_missing_field_raises_key_error(self):
+        ctx = TaskContext(make_task(fields=[]), AsyncMock())
+        with pytest.raises(KeyError, match="Missing"):
+            ctx.dump("Missing")
+
+
+# ── _find_catalog_item / _catalog_display ──────────────────────
+
+
+def _item(item_id: int, values: list[str], deleted: bool = False) -> CatalogItem:
+    return CatalogItem(item_id=item_id, values=values, deleted=deleted or None)
+
+
+class TestCatalogDisplay:
+    def test_filters_numeric(self):
+        assert _catalog_display(["123", "Moscow", "Russia"]) == "Moscow / Russia"
+
+    def test_all_numeric_fallback(self):
+        """When all values are numeric, returns empty (fallback to raw)."""
+        assert _catalog_display(["1", "2", "3"]) == ""
+
+    def test_single_non_numeric(self):
+        assert _catalog_display(["42", "Development"]) == "Development"
+
+    def test_empty_strings_skipped(self):
+        assert _catalog_display(["", "IT", "", "Dev"]) == "IT / Dev"
+
+    def test_negative_numbers_filtered(self):
+        assert _catalog_display(["-5", "Value"]) == "Value"
+
+
+class TestFindCatalogItem:
+    """Tests for _find_catalog_item — 6-pass matching strategy."""
+
+    ITEMS = [
+        _item(1, ["10", "FooTracker", "App\\Web"]),
+        _item(2, ["20", "BarBoard", "App\\Web"]),
+        _item(3, ["30", "BazMail", "Desktop"]),
+        _item(4, ["40", "QuxChat", "App\\Web", "SaaS"]),
+        _item(5, ["50", "Deleted Tool", "Desktop"], deleted=True),
+    ]
+
+    def test_exact_display_text(self):
+        """Pass 1: exact match on display text."""
+        item = _find_catalog_item(self.ITEMS, "FooTracker / App\\Web")
+        assert item is not None
+        assert item.item_id == 1
+
+    def test_exact_column_value(self):
+        """Pass 2: exact match on single column."""
+        item = _find_catalog_item(self.ITEMS, "BazMail")
+        assert item is not None
+        assert item.item_id == 3
+
+    def test_parts_matching(self):
+        """Pass 3: all ' / '-separated parts found in columns."""
+        item = _find_catalog_item(self.ITEMS, "App\\Web / SaaS")
+        assert item is not None
+        assert item.item_id == 4  # only QuxChat has both
+
+    def test_case_insensitive_display(self):
+        """Pass 4: case-insensitive display text."""
+        item = _find_catalog_item(self.ITEMS, "footracker / app\\web")
+        assert item is not None
+        assert item.item_id == 1
+
+    def test_case_insensitive_column(self):
+        """Pass 5: case-insensitive column value."""
+        item = _find_catalog_item(self.ITEMS, "bazmail")
+        assert item is not None
+        assert item.item_id == 3
+
+    def test_case_insensitive_parts(self):
+        """Pass 6: case-insensitive parts matching."""
+        item = _find_catalog_item(self.ITEMS, "app\\web / saas")
+        assert item is not None
+        assert item.item_id == 4
+
+    def test_not_found(self):
+        assert _find_catalog_item(self.ITEMS, "NonExistent") is None
+
+    def test_deleted_items_skipped(self):
+        """Deleted items must never match."""
+        item = _find_catalog_item(self.ITEMS, "Deleted Tool")
+        assert item is None
+
+    def test_numeric_id_not_matched_in_display(self):
+        """Passing a numeric ID should NOT match via display text."""
+        item = _find_catalog_item(self.ITEMS, "10")
+        # "10" is in item 1's values column — matched by pass 2 (exact column)
+        assert item is not None
+        assert item.item_id == 1
+
+
+# ── ctx.get_id / ctx.get_type / ctx.get_catalog_id ─────────────
+
+
+class TestGetId:
+    def test_returns_field_id(self):
+        field = make_field(id=42, name="Status", type="text", value="Open")
+        ctx = TaskContext(make_task(fields=[field]), AsyncMock())
+        assert ctx.get_id("Status") == 42
+
+    def test_missing_field_raises_key_error(self):
+        ctx = TaskContext(make_task(fields=[]), AsyncMock())
+        with pytest.raises(KeyError, match="Missing"):
+            ctx.get_id("Missing")
+
+    def test_field_id_alias_works(self):
+        """field_id() is an alias for get_id()."""
+        field = make_field(id=42, name="Status", type="text", value="Open")
+        ctx = TaskContext(make_task(fields=[field]), AsyncMock())
+        assert ctx.field_id("Status") == 42
+
+
+class TestGetType:
+    def test_returns_field_type(self):
+        field = make_field(id=1, name="Status", type="multiple_choice", value=None)
+        ctx = TaskContext(make_task(fields=[field]), AsyncMock())
+        assert ctx.get_type("Status") == "multiple_choice"
+
+    def test_catalog_type(self):
+        field = make_field(id=2, name="Type", type="catalog", value=None)
+        ctx = TaskContext(make_task(fields=[field]), AsyncMock())
+        assert ctx.get_type("Type") == "catalog"
+
+    def test_missing_field_raises_key_error(self):
+        ctx = TaskContext(make_task(fields=[]), AsyncMock())
+        with pytest.raises(KeyError, match="Missing"):
+            ctx.get_type("Missing")
+
+    def test_field_type_alias_works(self):
+        """field_type() is an alias for get_type()."""
+        field = make_field(id=1, name="Status", type="text", value=None)
+        ctx = TaskContext(make_task(fields=[field]), AsyncMock())
+        assert ctx.field_type("Status") == "text"
+
+
+class TestGetCatalogId:
+    async def test_returns_catalog_id(self):
+        """get_catalog_id() fetches form definition and returns catalog_id from info."""
+        field = make_field(id=5, name="Request Type", type="catalog", value={"item_id": 1})
+        form_field = FormField(
+            id=5,
+            name="Request Type",
+            type=FieldType.catalog,
+            info={"catalog_id": 1910},
+        )
+        form = MagicMock()
+        form.get_field = MagicMock(return_value=form_field)
+
+        client = AsyncMock()
+        client.get_form = AsyncMock(return_value=form)
+
+        ctx = TaskContext(make_task(id=42, form_id=321, fields=[field]), client)
+        result = await ctx.get_catalog_id("Request Type")
+        assert result == 1910
+        client.get_form.assert_called_once_with(321)
+
+    async def test_catalog_id_alias_works(self):
+        """catalog_id() is an alias for get_catalog_id()."""
+        field = make_field(id=5, name="Request Type", type="catalog", value={"item_id": 1})
+        form_field = FormField(
+            id=5,
+            name="Request Type",
+            type=FieldType.catalog,
+            info={"catalog_id": 1910},
+        )
+        form = MagicMock()
+        form.get_field = MagicMock(return_value=form_field)
+
+        client = AsyncMock()
+        client.get_form = AsyncMock(return_value=form)
+
+        ctx = TaskContext(make_task(id=42, form_id=321, fields=[field]), client)
+        result = await ctx.catalog_id("Request Type")
+        assert result == 1910
+
+    async def test_missing_field_raises_key_error(self):
+        ctx = TaskContext(make_task(fields=[]), AsyncMock())
+        with pytest.raises(KeyError):
+            await ctx.get_catalog_id("Missing")
+
+    async def test_non_catalog_field_raises_type_error(self):
+        field = make_field(id=5, name="Status", type="text", value="Open")
+        ctx = TaskContext(make_task(fields=[field]), AsyncMock())
+        with pytest.raises(TypeError, match="not 'catalog'"):
+            await ctx.get_catalog_id("Status")
+
+    async def test_no_form_id_raises_value_error(self):
+        field = make_field(id=5, name="Cat", type="catalog", value={"item_id": 1})
+        ctx = TaskContext(make_task(form_id=None, fields=[field]), AsyncMock())
+        with pytest.raises(ValueError, match="no form_id"):
+            await ctx.get_catalog_id("Cat")
+
+    async def test_no_catalog_id_in_form_raises_value_error(self):
+        field = make_field(id=5, name="Cat", type="catalog", value={"item_id": 1})
+        form_field = FormField(id=5, name="Cat", type=FieldType.catalog, info={})
+        form = MagicMock()
+        form.get_field = MagicMock(return_value=form_field)
+
+        client = AsyncMock()
+        client.get_form = AsyncMock(return_value=form)
+
+        ctx = TaskContext(make_task(form_id=321, fields=[field]), client)
+        with pytest.raises(ValueError, match="catalog_id not found"):
+            await ctx.get_catalog_id("Cat")
+
+
+# ── ctx.set() catalog string resolution ────────────────────────
+
+
+class TestResolveCatalog:
+    async def test_resolve_catalog_by_string(self):
+        """String value for catalog triggers form + catalog lookup."""
+        field = make_field(id=5, name="Type", type="catalog", value={"item_id": 1})
+        returned_task = make_task(id=42, form_id=321, fields=[field])
+
+        form_field = FormField(
+            id=5, name="Type", type=FieldType.catalog, info={"catalog_id": 99}
+        )
+        form = MagicMock()
+        form.get_field = MagicMock(return_value=form_field)
+
+        catalog = Catalog(
+            catalog_id=99,
+            name="Programs",
+            items=[
+                CatalogItem(item_id=1001, values=["10", "Alpha", "Web"]),
+                CatalogItem(item_id=1002, values=["20", "Beta", "Desktop"]),
+            ],
+        )
+
+        client = AsyncMock()
+        client.comment_task = AsyncMock(return_value=returned_task)
+        client.get_form = AsyncMock(return_value=form)
+        client.get_catalog = AsyncMock(return_value=catalog)
+
+        ctx = TaskContext(make_task(id=42, form_id=321, fields=[field]), client)
+        ctx.set("Type", "Beta")
+        await ctx.answer()
+
+        updates = client.comment_task.call_args[1]["field_updates"]
+        assert updates == [{"id": 5, "value": {"item_id": 1002}}]
+
+    async def test_resolve_catalog_by_display_text(self):
+        """Multi-column display text ('Web / Alpha') resolves correctly."""
+        field = make_field(id=5, name="Type", type="catalog", value={"item_id": 1})
+        returned_task = make_task(id=42, form_id=321, fields=[field])
+
+        form_field = FormField(
+            id=5, name="Type", type=FieldType.catalog, info={"catalog_id": 99}
+        )
+        form = MagicMock()
+        form.get_field = MagicMock(return_value=form_field)
+
+        catalog = Catalog(
+            catalog_id=99,
+            name="Programs",
+            items=[
+                CatalogItem(item_id=1001, values=["10", "Alpha", "Web"]),
+                CatalogItem(item_id=1002, values=["20", "Beta", "Desktop"]),
+            ],
+        )
+
+        client = AsyncMock()
+        client.comment_task = AsyncMock(return_value=returned_task)
+        client.get_form = AsyncMock(return_value=form)
+        client.get_catalog = AsyncMock(return_value=catalog)
+
+        ctx = TaskContext(make_task(id=42, form_id=321, fields=[field]), client)
+        ctx.set("Type", "Alpha / Web")
+        await ctx.answer()
+
+        updates = client.comment_task.call_args[1]["field_updates"]
+        assert updates == [{"id": 5, "value": {"item_id": 1001}}]
+
+    async def test_resolve_catalog_by_int(self):
+        """Int value for catalog is passed through as item_id (no lookup)."""
+        field = make_field(id=5, name="Type", type="catalog", value={"item_id": 1})
+        returned_task = make_task(id=42, form_id=321, fields=[field])
+
+        client = AsyncMock()
+        client.comment_task = AsyncMock(return_value=returned_task)
+
+        ctx = TaskContext(make_task(id=42, form_id=321, fields=[field]), client)
+        ctx.set("Type", 1002)
+        await ctx.answer()
+
+        updates = client.comment_task.call_args[1]["field_updates"]
+        assert updates == [{"id": 5, "value": {"item_id": 1002}}]
+        # No form/catalog API calls needed
+        client.get_form.assert_not_called()
+
+    async def test_resolve_catalog_not_found_error(self):
+        """Unknown catalog value → ValueError with hints."""
+        field = make_field(id=5, name="Type", type="catalog", value={"item_id": 1})
+
+        form_field = FormField(
+            id=5, name="Type", type=FieldType.catalog, info={"catalog_id": 99}
+        )
+        form = MagicMock()
+        form.get_field = MagicMock(return_value=form_field)
+
+        catalog = Catalog(
+            catalog_id=99,
+            name="Programs",
+            items=[CatalogItem(item_id=1001, values=["10", "Alpha", "Web"])],
+        )
+
+        client = AsyncMock()
+        client.get_form = AsyncMock(return_value=form)
+        client.get_catalog = AsyncMock(return_value=catalog)
+
+        ctx = TaskContext(make_task(id=42, form_id=321, fields=[field]), client)
+        ctx.set("Type", "NonExistent")
+        with pytest.raises(ValueError, match="not found"):
+            await ctx.answer()
+
+    async def test_resolve_catalog_no_form_id(self):
+        """Catalog string on a free task (no form_id) → ValueError."""
+        field = make_field(id=5, name="Type", type="catalog", value={"item_id": 1})
+        client = AsyncMock()
+
+        ctx = TaskContext(make_task(id=42, form_id=None, fields=[field]), client)
+        ctx.set("Type", "Alpha")
+        with pytest.raises(ValueError, match="no form_id"):
+            await ctx.answer()
