@@ -5,6 +5,13 @@ All notable changes to **aiopyrus** will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
+## [0.7.1] — 2026-04-26
+
+### Fixed
+- **Pyright errors in tests**: `FakeBot` mocks now cast to `PyrusBot` for
+  `Filter.resolve()` calls — фикс CI после v0.7.0.
+
+---
 ## [0.7.0] — 2026-04-26
 
 ### Added
