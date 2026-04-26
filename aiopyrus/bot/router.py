@@ -112,6 +112,23 @@ class Router:
         log.debug("Router %r included into %r", router.name, self.name)
 
     # ------------------------------------------------------------------
+    # Filter resolution
+    # ------------------------------------------------------------------
+
+    async def resolve_filters(self, bot: PyrusBot) -> None:
+        """Run :meth:`Filter.resolve` on every registered filter.
+
+        Called automatically by :class:`Dispatcher` at startup (polling
+        and webhook modes). Currently used by :class:`FormFilter` to turn
+        form names into IDs via a single ``bot.get_forms()`` call.
+        """
+        for handler in self._handlers:
+            for f in handler.filters:
+                await f.resolve(bot)
+        for sub in self._sub_routers:
+            await sub.resolve_filters(bot)
+
+    # ------------------------------------------------------------------
     # Event processing
     # ------------------------------------------------------------------
 

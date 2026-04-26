@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
@@ -8,13 +9,19 @@ from aiopyrus.utils.context import _read_field
 from .base import Filter
 
 if TYPE_CHECKING:
+    from aiopyrus.bot.bot import PyrusBot
     from aiopyrus.types.webhook import WebhookPayload
+
+log = logging.getLogger("aiopyrus.filters")
 
 
 class FormFilter(Filter):
     """Match tasks belonging to specific form(s).
 
-    Фильтр по форме задачи.
+    Фильтр по форме задачи. Принимает ``id`` (int), название формы (str)
+    или их смесь. Имена резолвятся в id через ``bot.get_forms()`` один
+    раз при старте диспетчера (polling/webhook). Совпадение по имени —
+    точное; если не найдено — case-insensitive fallback.
 
     **Note:** ``form_id`` is ``None`` in responses from ``GET /inbox`` and
     ``GET /forms/{id}/register``.  In polling mode, ``start_polling()``
@@ -23,19 +30,53 @@ class FormFilter(Filter):
 
     Usage::
 
+        # By id
         @router.task_received(FormFilter(321))
-        async def handle(payload, bot):
-            ...
+        async def handle(ctx): ...
 
-        @router.task_received(FormFilter([321, 322]))
-        async def handle_multi(payload, bot):
-            ...
+        # By form name (resolved at startup)
+        @router.task_received(FormFilter("Заявки на доступ"))
+        async def handle(ctx): ...
+
+        # Mix and match
+        @router.task_received(FormFilter([321, "Согласование договора"]))
+        async def handle(ctx): ...
     """
 
-    def __init__(self, form_id: int | list[int]) -> None:
-        self._ids: set[int] = {form_id} if isinstance(form_id, int) else set(form_id)
+    def __init__(self, form: int | str | list[int | str]) -> None:
+        items = [form] if isinstance(form, (int, str)) else list(form)
+        self._ids: set[int] = {x for x in items if isinstance(x, int)}
+        self._names: set[str] = {x for x in items if isinstance(x, str)}
+
+    async def resolve(self, bot: PyrusBot) -> None:
+        if not self._names:
+            return
+        forms = await bot.get_forms()
+        by_name: dict[str, int] = {f.name: f.id for f in forms}
+        by_name_ci: dict[str, int] = {f.name.casefold(): f.id for f in forms}
+        unresolved: list[str] = []
+        for name in self._names:
+            if name in by_name:
+                self._ids.add(by_name[name])
+            elif name.casefold() in by_name_ci:
+                self._ids.add(by_name_ci[name.casefold()])
+            else:
+                unresolved.append(name)
+        if unresolved:
+            raise ValueError(
+                f"FormFilter: form name(s) not found in workspace: {unresolved}. "
+                f"Available forms: {sorted(by_name)}"
+            )
+        self._names.clear()
 
     async def __call__(self, payload: WebhookPayload) -> bool:
+        if self._names:
+            log.warning(
+                "FormFilter has unresolved name(s) %s — call await dp.resolve_filters(bot) "
+                "or use Dispatcher.start_polling/start_webhook which resolves automatically.",
+                sorted(self._names),
+            )
+            return False
         return payload.task.form_id in self._ids
 
 

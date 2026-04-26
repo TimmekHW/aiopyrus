@@ -69,6 +69,14 @@ class Dispatcher(Router):
     def __init__(self) -> None:
         super().__init__(name="root")
         self._middlewares: list[BaseMiddleware] = []
+        self._filters_resolved: bool = False
+
+    async def _ensure_filters_resolved(self, bot: PyrusBot) -> None:
+        """Resolve filter names → IDs once per dispatcher lifetime."""
+        if self._filters_resolved:
+            return
+        await self.resolve_filters(bot)
+        self._filters_resolved = True
 
     # ------------------------------------------------------------------
     # Middleware registration
@@ -133,6 +141,8 @@ class Dispatcher(Router):
 
         # Inject the fresh token from the webhook so the bot can make API calls
         bot.inject_token(payload)
+
+        await self._ensure_filters_resolved(bot)
 
         try:
             result = await self.process_event(payload, bot, middlewares=self._middlewares)
@@ -245,6 +255,8 @@ class Dispatcher(Router):
 
         if on_startup:
             await on_startup()
+
+        await self._ensure_filters_resolved(bot)
 
         log.info(
             "Polling started: form_ids=%s  steps=%s  interval=%.0fs  skip_old=%s",
@@ -392,6 +404,8 @@ class Dispatcher(Router):
 
         if on_startup:
             await on_startup()
+
+        await self._ensure_filters_resolved(bot)
 
         log.info("Inbox polling started: interval=%.0fs  skip_old=%s", interval, skip_old)
 

@@ -5,6 +5,24 @@ All notable changes to **aiopyrus** will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
+## [0.7.0] — 2026-04-26
+
+### Added
+- **`FormFilter` принимает названия форм**: `FormFilter("Заявки на доступ")` —
+  имена резолвятся в `id` через `bot.get_forms()` один раз при старте
+  диспетчера (polling/webhook). Поддерживает смешанный список:
+  `FormFilter([321, "Согласование договора"])`. Совпадение точное,
+  с case-insensitive fallback. Если имя не найдено — `ValueError` со
+  списком доступных форм.
+- **`Filter.resolve(bot)`**: новый async-хук базового класса для
+  одноразовой инициализации фильтров. `AndFilter` / `OrFilter` /
+  `NotFilter` рекурсивно проксируют вызов в дочерние фильтры.
+- **`Router.resolve_filters(bot)` / `Dispatcher._ensure_filters_resolved`**:
+  диспетчер автоматически вызывает `resolve` на всех зарегистрированных
+  фильтрах при первом `start_polling` / `start_inbox_polling` /
+  `process_webhook`. Идемпотентно — повторных вызовов API не делает.
+
+---
 ## [0.6.1] — 2026-03-03
 
 ### Fixed
