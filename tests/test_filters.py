@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING, cast
+
+if TYPE_CHECKING:
+    from aiopyrus.bot.bot import PyrusBot
 
 from aiopyrus.bot.filters.base import AndFilter, NotFilter, OrFilter
 from aiopyrus.bot.filters.builtin import (
@@ -56,7 +60,7 @@ class TestFormFilter:
                 ]
 
         f = FormFilter("Заявки на доступ")
-        await f.resolve(FakeBot())
+        await f.resolve(cast("PyrusBot", FakeBot()))
         assert await f(make_payload(form_id=321)) is True
         assert await f(make_payload(form_id=999)) is False
 
@@ -68,7 +72,7 @@ class TestFormFilter:
                 return [Form(id=321, name="Заявки на Доступ")]
 
         f = FormFilter("заявки на доступ")
-        await f.resolve(FakeBot())
+        await f.resolve(cast("PyrusBot", FakeBot()))
         assert await f(make_payload(form_id=321)) is True
 
     async def test_mixed_id_and_name(self):
@@ -79,7 +83,7 @@ class TestFormFilter:
                 return [Form(id=999, name="Согласование")]
 
         f = FormFilter([321, "Согласование"])
-        await f.resolve(FakeBot())
+        await f.resolve(cast("PyrusBot", FakeBot()))
         assert await f(make_payload(form_id=321)) is True
         assert await f(make_payload(form_id=999)) is True
         assert await f(make_payload(form_id=111)) is False
@@ -93,7 +97,7 @@ class TestFormFilter:
 
         f = FormFilter("Не существует")
         try:
-            await f.resolve(FakeBot())
+            await f.resolve(cast("PyrusBot", FakeBot()))
         except ValueError as exc:
             assert "Не существует" in str(exc)
         else:
@@ -116,7 +120,7 @@ class TestFormFilter:
 
         bot = FakeBot()
         f = FormFilter([321, 322])
-        await f.resolve(bot)
+        await f.resolve(cast("PyrusBot", bot))
         assert bot.calls == 0
 
     async def test_resolve_propagates_through_composite(self):
@@ -128,7 +132,7 @@ class TestFormFilter:
                 return [Form(id=321, name="Заявки")]
 
         composite = FormFilter("Заявки") & StepFilter(2)
-        await composite.resolve(FakeBot())
+        await composite.resolve(cast("PyrusBot", FakeBot()))
         # Inner FormFilter should now match by id
         p_match = make_payload(form_id=321, current_step=2)
         p_wrong_step = make_payload(form_id=321, current_step=3)
