@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from aiopyrus.bot.bot import PyrusBot
     from aiopyrus.types.webhook import WebhookPayload
 
 
@@ -16,6 +17,15 @@ class Filter(ABC):
 
     @abstractmethod
     async def __call__(self, payload: WebhookPayload) -> bool | dict: ...
+
+    async def resolve(self, bot: PyrusBot) -> None:
+        """Optional one-shot async setup before the first event.
+
+        Override in filters that need to resolve names/IDs via the API
+        (e.g., :class:`FormFilter` resolves form names to IDs).  Default is
+        a no-op.  Composite filters (And/Or/Not) propagate to children.
+        """
+        return None
 
     def __and__(self, other: Filter) -> AndFilter:
         return AndFilter(self, other)
@@ -41,6 +51,10 @@ class AndFilter(Filter):
                 result.update(r)
         return result or True
 
+    async def resolve(self, bot: PyrusBot) -> None:
+        for f in self._filters:
+            await f.resolve(bot)
+
 
 class OrFilter(Filter):
     def __init__(self, *filters: Filter) -> None:
@@ -53,6 +67,10 @@ class OrFilter(Filter):
                 return r
         return False
 
+    async def resolve(self, bot: PyrusBot) -> None:
+        for f in self._filters:
+            await f.resolve(bot)
+
 
 class NotFilter(Filter):
     def __init__(self, inner: Filter) -> None:
@@ -61,3 +79,6 @@ class NotFilter(Filter):
     async def __call__(self, payload: WebhookPayload) -> bool:
         result = await self._inner(payload)
         return not result
+
+    async def resolve(self, bot: PyrusBot) -> None:
+        await self._inner.resolve(bot)

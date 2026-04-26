@@ -183,8 +183,12 @@ async def on_new_task(ctx: TaskContext):
 ```python
 from aiopyrus import FormFilter, StepFilter, FieldValueFilter, EventFilter, F
 
-# Классические
+# Классические — по id
 @router.task_received(FormFilter(321), StepFilter(2))
+
+# Или по названию формы (резолвится в id один раз при старте через bot.get_forms())
+@router.task_received(FormFilter("Заявки на доступ"), StepFilter(2))
+@router.task_received(FormFilter([321, "Согласование договора"]))  # mix
 
 # По значению поля
 @router.task_received(FieldValueFilter(field_name="Тип", value="Баг"))

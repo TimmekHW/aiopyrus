@@ -45,6 +45,96 @@ class TestFormFilter:
         assert await FormFilter(321)(p) is False
         assert await FormFilter([321, 322])(p) is False
 
+    async def test_match_by_name_after_resolve(self):
+        from aiopyrus.types.form import Form
+
+        class FakeBot:
+            async def get_forms(self):
+                return [
+                    Form(id=321, name="Заявки на доступ"),
+                    Form(id=999, name="Согласование"),
+                ]
+
+        f = FormFilter("Заявки на доступ")
+        await f.resolve(FakeBot())
+        assert await f(make_payload(form_id=321)) is True
+        assert await f(make_payload(form_id=999)) is False
+
+    async def test_match_by_name_case_insensitive(self):
+        from aiopyrus.types.form import Form
+
+        class FakeBot:
+            async def get_forms(self):
+                return [Form(id=321, name="Заявки на Доступ")]
+
+        f = FormFilter("заявки на доступ")
+        await f.resolve(FakeBot())
+        assert await f(make_payload(form_id=321)) is True
+
+    async def test_mixed_id_and_name(self):
+        from aiopyrus.types.form import Form
+
+        class FakeBot:
+            async def get_forms(self):
+                return [Form(id=999, name="Согласование")]
+
+        f = FormFilter([321, "Согласование"])
+        await f.resolve(FakeBot())
+        assert await f(make_payload(form_id=321)) is True
+        assert await f(make_payload(form_id=999)) is True
+        assert await f(make_payload(form_id=111)) is False
+
+    async def test_unknown_name_raises(self):
+        from aiopyrus.types.form import Form
+
+        class FakeBot:
+            async def get_forms(self):
+                return [Form(id=321, name="Заявки")]
+
+        f = FormFilter("Не существует")
+        try:
+            await f.resolve(FakeBot())
+        except ValueError as exc:
+            assert "Не существует" in str(exc)
+        else:
+            raise AssertionError("Expected ValueError for unknown form name")
+
+    async def test_unresolved_name_returns_false_with_warning(self, caplog):
+        f = FormFilter("Какая-то форма")
+        result = await f(make_payload(form_id=321))
+        assert result is False
+
+    async def test_resolve_idempotent_skips_when_no_names(self):
+        """resolve() with only ints does NOT call get_forms()."""
+
+        class FakeBot:
+            calls = 0
+
+            async def get_forms(self):
+                self.calls += 1
+                return []
+
+        bot = FakeBot()
+        f = FormFilter([321, 322])
+        await f.resolve(bot)
+        assert bot.calls == 0
+
+    async def test_resolve_propagates_through_composite(self):
+        from aiopyrus.bot.filters.builtin import StepFilter
+        from aiopyrus.types.form import Form
+
+        class FakeBot:
+            async def get_forms(self):
+                return [Form(id=321, name="Заявки")]
+
+        composite = FormFilter("Заявки") & StepFilter(2)
+        await composite.resolve(FakeBot())
+        # Inner FormFilter should now match by id
+        p_match = make_payload(form_id=321, current_step=2)
+        p_wrong_step = make_payload(form_id=321, current_step=3)
+        assert await composite(p_match) is True
+        assert await composite(p_wrong_step) is False
+
 
 # ── StepFilter ────────────────────────────────────────────────
 
