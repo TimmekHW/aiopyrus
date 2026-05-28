@@ -5,6 +5,31 @@ All notable changes to **aiopyrus** will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
+## [0.7.2] — 2026-05-28
+
+### Fixed
+- **`Channel.type` no longer crashes `Task` parsing on unknown values.**
+  Pyrus corp/on-premise instances send server-internal channel types not in
+  the documented list — observed: `delay_escalation`. Previously a single
+  such comment broke `Task.model_validate()` and made the task entirely
+  unreadable (e.g. `get_task`, `task_context`, polling all failed). The
+  field is now read into a plain `str`; the `ChannelType` enum stays as a
+  set of constants for *sending* comments.
+- **`find_member()` accepts numeric strings as person IDs.**
+  `find_member("100500")` (typical when `person_id` is stored as `str` in
+  a database / CSV) now performs a direct `GET /members/{id}` lookup
+  instead of failing the name search. `find_member(int)` is also explicitly
+  supported. Errors (404 / 403) return `None`. Knock-on fix: `ctx.reassign()`
+  and `ctx.fill("Person field", "100500")` now also work with numeric strings.
+
+### Added
+- **`find_member_by_id(person_id)`** — strict, unambiguous lookup by `person_id`.
+  Symmetric to `find_member_by_email` — accepts `int` or numeric `str`,
+  returns `None` on 404 / 403 instead of raising. Useful when there are
+  several namesakes in the org and the auto-resolver inside `find_member`
+  would be ambiguous.
+
+---
 ## [0.7.1] — 2026-04-26
 
 ### Fixed

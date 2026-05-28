@@ -274,12 +274,15 @@ async with UserClient(login=LOGIN, security_key=KEY) as client:
     cat = await client.get_catalog(999)
     item = cat.find_item("Москва")
 
-    # Участники
+    # Участники — умный поиск (имя/email/логин/ID)
     person = await client.find_member("Данил Колбасенко")
+    person = await client.find_member("100500")           # числовая строка → ID
+    person = await client.find_member(100500)             # int → ID
     members = await client.get_members()
 
-    # Поиск по email
-    person = await client.find_member_by_email("kolbasenko@corp.ru")
+    # Строгий поиск (когда в компании несколько тёзок)
+    person = await client.find_member_by_id(100500)        # только по ID
+    person = await client.find_member_by_email("kolbasenko@corp.ru")  # только по email
     found = await client.find_members_by_emails(["alice@corp.ru", "bob@corp.ru"])
 
     # Аватар
@@ -491,6 +494,48 @@ bot = PyrusBot(
 
 Встроенный rate limiter с экспоненциальным backoff. Лимиты Pyrus API: 5000 запросов / 10 мин.
 
+## Дебаг — что именно отправляется в Pyrus
+
+Все HTTP-запросы и ответы пишутся в стандартный `logging` — нужно только поднять уровень:
+
+```python
+import logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s %(levelname)-5s %(name)s: %(message)s",
+)
+# Или точечно — только aiopyrus, не httpx/asyncio:
+logging.getLogger("aiopyrus").setLevel(logging.DEBUG)
+```
+
+Будет видно метод, полный URL, какие ключи отправили, статус ответа и тайминг:
+
+```
+DEBUG aiopyrus.session: → POST https://api.pyrus.com/v4/tasks/12345678/comments  body=['text', 'approval_choice']
+DEBUG aiopyrus.session:    status=200  keys=['task']  rl_remaining=4997
+DEBUG aiopyrus.session: ← POST tasks/12345678/comments  213ms
+```
+
+Loggers по компонентам:
+
+| Logger | Что показывает |
+|---|---|
+| `aiopyrus.session` | HTTP-запросы, auth, retry на 401/429/5xx |
+| `aiopyrus.client` | Warnings из батч-операций (пропущенные задачи) |
+| `aiopyrus.dispatcher` | Цикл polling, backoff, ошибки хендлеров |
+| `aiopyrus.filters` | Нерезолвленные имена форм в `FormFilter` |
+| `aiopyrus.context` | Pre-check обязательных полей перед approve/finish |
+| `aiopyrus.rate_limiter` | Конфиг rate limiter при старте |
+| `aiopyrus.webhook` | Приём вебхуков |
+
+Чтобы заодно увидеть HTTP на уровне httpx (заголовки, низкоуровневые connect/close):
+
+```python
+logging.getLogger("httpx").setLevel(logging.DEBUG)
+```
+
+Полный пример с фильтрацией по компонентам — [`examples/13_debug_logging.py`](examples/13_debug_logging.py).
+
 ## On-premise
 
 ```python
@@ -530,6 +575,7 @@ client = UserClient(
 | [`10_polling_auto_approve.py`](examples/10_polling_auto_approve.py) | Polling + FormFilter + StepFilter + ApprovalPendingFilter |
 | [`11_http_integration.py`](examples/11_http_integration.py) | HTTP-сервер для внешних систем (PHP, 1C и др.) |
 | [`12_embed_in_project.py`](examples/12_embed_in_project.py) | Встраивание aiopyrus в FastAPI / Django / Celery |
+| [`13_debug_logging.py`](examples/13_debug_logging.py) | Дебаг: какие запросы шлёт библиотека (URL, body, статус, тайминг) |
 
 ## FAQ
 

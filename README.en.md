@@ -248,12 +248,15 @@ async with UserClient(login=LOGIN, security_key=KEY) as client:
     cat = await client.get_catalog(999)
     item = cat.find_item("Moscow")
 
-    # Members
+    # Members — smart lookup (name / email / login / numeric id)
     person = await client.find_member("John Smith")
+    person = await client.find_member("100500")            # numeric str → id
+    person = await client.find_member(100500)              # int → id
     members = await client.get_members()
 
-    # Find by email
-    person = await client.find_member_by_email("john@corp.com")
+    # Strict lookups (use when several people share the same name)
+    person = await client.find_member_by_id(100500)         # id only
+    person = await client.find_member_by_email("john@corp.com")  # email only (exact)
     found = await client.find_members_by_emails(["alice@corp.com", "bob@corp.com"])
 
     # Avatar
@@ -465,6 +468,49 @@ bot = PyrusBot(
 
 Built-in rate limiter with exponential backoff. Pyrus API limits: 5000 requests / 10 min.
 
+## Debugging — see exactly what hits Pyrus
+
+All HTTP requests and responses are emitted via the standard `logging` module —
+just raise the level:
+
+```python
+import logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s %(levelname)-5s %(name)s: %(message)s",
+)
+# Or scope it to aiopyrus only (skip httpx/asyncio noise):
+logging.getLogger("aiopyrus").setLevel(logging.DEBUG)
+```
+
+You'll see method, full URL, request body keys, response status and timing:
+
+```
+DEBUG aiopyrus.session: → POST https://api.pyrus.com/v4/tasks/12345678/comments  body=['text', 'approval_choice']
+DEBUG aiopyrus.session:    status=200  keys=['task']  rl_remaining=4997
+DEBUG aiopyrus.session: ← POST tasks/12345678/comments  213ms
+```
+
+Loggers by component:
+
+| Logger | What it shows |
+|---|---|
+| `aiopyrus.session` | HTTP requests, auth, retry on 401/429/5xx |
+| `aiopyrus.client` | Warnings from batch operations (skipped tasks) |
+| `aiopyrus.dispatcher` | Polling loop, backoff, handler errors |
+| `aiopyrus.filters` | Unresolved form names in `FormFilter` |
+| `aiopyrus.context` | Required-field pre-check before approve/finish |
+| `aiopyrus.rate_limiter` | Rate limiter config at startup |
+| `aiopyrus.webhook` | Incoming webhooks |
+
+To also see low-level HTTP (headers, connect/close):
+
+```python
+logging.getLogger("httpx").setLevel(logging.DEBUG)
+```
+
+Full example with per-component filtering — [`examples/13_debug_logging.py`](examples/13_debug_logging.py).
+
 ## On-premise
 
 ```python
@@ -504,6 +550,7 @@ See [`examples/`](examples/) — 12 files from simple to advanced:
 | [`10_polling_auto_approve.py`](examples/10_polling_auto_approve.py) | Polling + FormFilter + StepFilter + ApprovalPendingFilter |
 | [`11_http_integration.py`](examples/11_http_integration.py) | HTTP server for external systems (PHP, 1C, etc.) |
 | [`12_embed_in_project.py`](examples/12_embed_in_project.py) | Embedding aiopyrus into FastAPI / Django / Celery |
+| [`13_debug_logging.py`](examples/13_debug_logging.py) | Debug: see what the library actually sends to Pyrus (URL, body, status, timing) |
 
 ## FAQ
 

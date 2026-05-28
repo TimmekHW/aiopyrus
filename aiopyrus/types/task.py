@@ -26,7 +26,13 @@ class TaskAction(str, Enum):
 
 
 class ChannelType(str, Enum):
-    """External channel types (GET response from Pyrus)."""
+    """Known external channel types — constants for *sending* comments.
+
+    Pyrus also returns server-internal channel types not listed here
+    (e.g. ``delay_escalation`` on on-premise instances). Reading is therefore
+    done into a plain ``str`` on :class:`Channel`, so unknown values never
+    crash task parsing — see ``Channel.type``.
+    """
 
     email = "email"
     telegram = "telegram"
@@ -59,11 +65,16 @@ class Channel(PyrusModel):
 
     Pyrus returns this as an object (not a bare string) in GET responses.
     Use :class:`ChannelType` (= ``CommentChannel``) when *sending* a comment.
+
+    ``type`` is kept as a free-form ``str`` (not the :class:`ChannelType` enum)
+    so that Pyrus-internal values not yet in the enum — for example
+    ``delay_escalation`` on corp / on-premise instances — do not crash
+    task parsing.
     """
 
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
 
-    type: ChannelType | None = None
+    type: str | None = None
     to: ChannelContact | None = None
     # ``from`` is a reserved keyword in Python — alias maps "from" → from_
     from_: ChannelContact | None = Field(None, alias="from")

@@ -149,10 +149,22 @@ async def demo_members(client: UserClient) -> None:
     else:
         print("Не найден / Not found")
 
+    # find_member умеет резолвить и числовой ID (int или строка из БД/CSV)
+    # find_member also resolves numeric IDs (int or str from a DB / CSV)
+    by_id_smart = await client.find_member("100500")  # = find_member(100500)
+    print(f"По строке-числу: {by_id_smart.full_name if by_id_smart else 'не найден'}")
+
     # Найти все совпадения / Find all matches
     # matches = await client.find_members("Колбасенко")
     # for m in matches:
     #     print(f"  {m.full_name} ({m.email})")
+
+    # Строгий поиск без эвристик — для случаев, когда в компании несколько тёзок
+    # Strict lookups — when several people share the same name
+    only_by_id = await client.find_member_by_id(100500)  # только ID / id only
+    only_by_email = await client.find_member_by_email("kolbasenko@example.com")
+    print(f"Строго по ID: {only_by_id and only_by_id.id}")
+    print(f"Строго по email: {only_by_email and only_by_email.email}")
 
     # Создать / Create
     # new = await client.create_member(

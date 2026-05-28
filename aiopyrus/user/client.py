@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 import aiofiles
 
 from aiopyrus.api.session import PyrusSession
-from aiopyrus.exceptions import PyrusFileSizeError
+from aiopyrus.exceptions import PyrusFileSizeError, PyrusNotFoundError, PyrusPermissionError
 from aiopyrus.types.catalog import Catalog, CatalogSyncResult
 from aiopyrus.types.file import UploadedFile
 from aiopyrus.types.form import Form
@@ -1373,19 +1373,35 @@ class UserClient:
         data = await self._session.delete(f"members/{member_id}")
         return bool(data.get("banned"))
 
-    async def find_member(self, name: str) -> Person | None:
-        """Найти сотрудника по частичному совпадению имени (регистронезависимо).
+    async def find_member(self, name: str | int) -> Person | None:
+        """Найти сотрудника по имени, email, логину или числовому person_id.
 
-        Ищет по полному имени, имени и фамилии по отдельности, логину и email.
-        Возвращает первое совпадение или None.
+        Find a member by name, email, login or numeric person_id.
+
+        Поведение / Behaviour:
+
+        - ``int`` или строка из цифр (``"100500"``) → прямой ``get_member()`` по ID.
+          Возвращает ``None`` если такого ID нет или нет прав на чтение.
+        - ``str`` → частичное совпадение (регистронезависимое) по полному имени,
+          имени, фамилии, логину или email. Возвращает первое совпадение.
+
+        Числовая строка трактуется как ID — это типичный кейс, когда person_id
+        приходит из БД/CSV/JSON в строковом виде.
 
         Example::
 
-            person = await client.find_member("Ivanov")
-            # → Person(id=100500, first_name='Ivan', last_name='Ivanov', …)
-
-            person = await client.find_member("Petrov Sergey")
+            person = await client.find_member("Колбасенко")             # by name
+            person = await client.find_member("kolbasenko@example.com")  # by email
+            person = await client.find_member(100500)                   # by id (int)
+            person = await client.find_member("100500")                 # by id (str)
         """
+        # Numeric → person_id direct lookup.
+        if isinstance(name, int) or (isinstance(name, str) and name.strip().lstrip("-").isdigit()):
+            try:
+                return await self.get_member(int(name))
+            except (PyrusNotFoundError, PyrusPermissionError):
+                return None
+
         query = name.lower()
         members = await self.get_members()
         for m in members:
@@ -1421,6 +1437,37 @@ class UserClient:
             ):
                 result.append(m)
         return result
+
+    async def find_member_by_id(self, person_id: int | str) -> Person | None:
+        """Найти сотрудника **строго** по числовому ``person_id``.
+
+        Find a member by ``person_id`` only — strict, unambiguous lookup.
+
+        В отличие от :meth:`find_member` (умный поиск по имени/email/ID
+        с подстрокой), этот метод смотрит **только** на численный ID.
+        Возвращает ``None`` если такого ID нет или нет прав на чтение
+        (никаких исключений — симметрично :meth:`find_member_by_email`).
+
+        Принимает ``int`` или строку из цифр (``"100500"`` из БД / CSV).
+
+        Example::
+
+            # 3 тёзки в компании — выбрать конкретного по ID
+            person = await client.find_member_by_id(192431)
+            person = await client.find_member_by_id("192431")  # str из БД
+        """
+        if isinstance(person_id, str):
+            stripped = person_id.strip()
+            if not stripped.lstrip("-").isdigit():
+                raise ValueError(
+                    f"find_member_by_id expects a numeric value, got {person_id!r}. "
+                    f"Use find_member() for name/email search."
+                )
+            person_id = int(stripped)
+        try:
+            return await self.get_member(person_id)
+        except (PyrusNotFoundError, PyrusPermissionError):
+            return None
 
     async def find_member_by_email(self, email: str) -> Person | None:
         """Find a member by exact email address (case-insensitive).
