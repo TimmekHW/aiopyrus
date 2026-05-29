@@ -5,6 +5,112 @@ All notable changes to **aiopyrus** will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
+## [0.8.0] — 2026-05-29
+
+Большой релиз поддержки Pyrus 2026 (после апгрейда Datacenter
+v1.22 → v1.23 → v1.24).  Доработано всё, что добавили в API за
+2025–2026, плюс закрыты пробелы в покрытии Roles / Lists / Calendar.
+
+### Добавлено — Knowledge Base API (v1.24, headline-фича 2026)
+- `get_knowledge_base_structure(parent_topic_id=None, depth=None)` —
+  иерархия БЗ (статьи + темы).
+- `get_knowledge_base_item(item_id)` — статья или тема по строковому ID.
+- `create_knowledge_base_item(title, type, parent_topic_id, body)` —
+  создать статью/тему.  Тип = `"article"` (нужен `body` с Markdown)
+  или `"topic"`.
+- `update_knowledge_base_item(item_id, ...)` — обновить.  Перемещение
+  в корень: `parent_topic_id=None, parent_topic_id_changed=True`.
+- `delete_knowledge_base_item(item_id, delete_with_children=)` — удалить.
+- `get_knowledge_base_permissions(item_id)` — разрешения (admin-gated).
+- `update_knowledge_base_permissions(item_id, inherit, readers, editors)` —
+  обновить разрешения (вход — `list[int]`, ответ — `list[Person]`).
+
+ID элементов БЗ — **строки** (`"BxqPU8UrjlC"`), не числа.
+
+Модели: `KnowledgeBaseStructure`, `KnowledgeBaseStructureNode`,
+`KnowledgeBaseItem`, `KnowledgeBaseAttachment`, `KnowledgeBasePermissions`.
+
+### Добавлено — Awards API (v1.22+)
+- `get_award_threshold(award_id)` / `set_award_threshold(...)` — пороги
+  выдачи и отзыва наград.
+- `get_member_award_counter(member_id, award_id)` — текущий счётчик
+  награды у сотрудника.
+- `increment_member_award_counter(member_id, award_id)` — увеличить.
+- `set_member_award_counter(member_id, award_id, value=)` — выставить
+  явно. **Важно:** `value` передаётся как `?value=N` query-string, не
+  JSON-тело (особенность Pyrus).
+
+Модели: `AwardThreshold`, `MemberAwardCounter`.
+
+Note: на новых сборках Pyrus (cloud / on-premise свежие) endpoint
+есть, но требует Configuration manager прав.  На legacy on-premise
+сборках вернёт 202 «No HTTP resource was found» — обычный
+`PyrusAPIError` в этом случае.
+
+### Добавлено — Telephony (интеграция с call-центром)
+- `register_call(account_id, from_number, to_number, mappings=, ...)` —
+  зарегистрировать звонок (`POST /integrations/call`).  Возвращает
+  ID созданной/найденной задачи и ответственного.
+- `attach_call_record(account_id, record_file, ...)` — прикрепить аудио
+  к задаче звонка (`POST /integrations/attachcallrecord`).  Идентификация
+  задачи: по `task_id` ИЛИ `external_id` ИЛИ паре номеров.
+
+Модели: `TelephonyMappingCode` (enum), `CallMapping` (с автоматической
+сериализацией `datetime → ISO-8601 Z`), `TelephonyPersonRef`,
+`RegisterCallResponse`, `AttachCallRecordResponse`.
+
+### Добавлено — расширение покрытия
+- `get_role(role_id)` — одна роль по ID.
+- `delete_role(role_id, task_receiver_id=)` — удалить роль; тело DELETE
+  содержит `task_receiver_id` (особенность Pyrus).
+- `get_list(list_id)` — один список задач по ID.
+- `get_list_tasks(list_id, ...)` — REST-вариант (`GET /lists/{id}/tasks`),
+  пара к существующему `get_task_list` (POST).  Pyrus иногда опускает
+  ключ `tasks` при пустом списке — корректно возвращаем `[]`.
+- `update_list(list_id, name, member_ids, manager_ids, ...)` — обновить
+  метаданные списка.
+
+### Изменено — `get_calendar()`
+- Новые параметры: `start_date_utc` / `end_date_utc` (datetime ISO 8601)
+  и `include_meetings` (`true` / `false`).
+- Старые `from_date` / `to_date` (`YYYY-MM-DD`) остались deprecated
+  alias'ами — бросают `DeprecationWarning` и маппятся в новые
+  параметры (с полуночью UTC).
+- `include_meetings` сериализуется как `"true"`/`"false"` (подтверждено
+  live: Pyrus отверг `"y"`/`"n"` для этого параметра, хотя у других
+  булевых параметров формат `"y"`/`"n"` работает).
+
+Добавлена модель `Meeting` (`MeetingJoinParameters`) и
+`CalendarResponse` (новый shape `{has_more, tasks, meetings}`).
+
+### Добавлено — расширение `Person` (модель)
+- `organization_id: int | None` — ID организации сотрудника.
+- `birth_date: dict | None` — `{day, month, year?}`.
+- `messenger: Messenger | None` — типизирован (`type`, `nickname`),
+  вместо старого `dict[str, Any]`.
+- Шесть полей политики admin-сессий (только на корп/on-premise):
+  `mobile_session_settings`, `mobile_session_inactive_settings`,
+  `mobile_session_restriction_settings`, `web_session_settings`,
+  `web_session_inactive_settings`, `web_session_restriction_settings` —
+  все типа `SessionPolicy | None`.
+
+### Добавлено — `ChannelType.max`
+- Константа MAX (VK мессенджер) — добавлен в Pyrus v1.23 (26.02.2026)
+  как новый канал поддержки клиентов.
+
+### Подтверждено живьём
+- KB structure на on-premise — 82 items в корне, рекурсивная иерархия,
+  строковые ID, корректно парсятся.
+- `Roles` (37 тыс. ролей), `Lists` (1.2 тыс. списков) — все методы
+  работают, включая роли с переносами в названии.
+- Calendar новые параметры — задачи возвращаются.
+- Awards — endpoint существует и на cloud, и на on-premise (403 без
+  Configuration manager прав).
+- KB на cloud — endpoint работает, в нашем тестовом workspace пусто.
+
+Тесты: **36 новых** (всего ~1000 проходят).
+
+---
 ## [0.7.3] — 2026-05-29
 
 ### Добавлено

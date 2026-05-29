@@ -40,6 +40,7 @@ class ChannelType(str, Enum):
     facebook = "facebook"
     vk = "vk"
     viber = "viber"
+    max = "max"  # VK Messenger (MAX), added in Pyrus v1.23 (26.02.2026)
     mobile_app = "mobile_app"
     web_widget = "web_widget"
     avito_job = "avito_job"

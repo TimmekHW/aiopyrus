@@ -1,3 +1,4 @@
+from .award import AwardThreshold, MemberAwardCounter
 from .base import PyrusModel
 from .catalog import Catalog, CatalogHeader, CatalogItem, CatalogSyncResult
 from .file import Attachment, UploadedFile
@@ -12,6 +13,13 @@ from .form import (
     MultipleChoiceValue,
     TableRow,
     TitleValue,
+)
+from .knowledge_base import (
+    KnowledgeBaseAttachment,
+    KnowledgeBaseItem,
+    KnowledgeBasePermissions,
+    KnowledgeBaseStructure,
+    KnowledgeBaseStructureNode,
 )
 from .params import MemberUpdate, NewRole, NewTask, PersonRef, PrintFormItem, RoleUpdate
 from .task import (
@@ -33,7 +41,26 @@ from .task import (
     TaskResponse,
     TaskStep,
 )
-from .user import ContactsResponse, Organization, Person, PersonType, Profile, Role
+from .telephony import (
+    AttachCallRecordResponse,
+    CalendarResponse,
+    CallMapping,
+    Meeting,
+    MeetingJoinParameters,
+    RegisterCallResponse,
+    TelephonyMappingCode,
+    TelephonyPersonRef,
+)
+from .user import (
+    ContactsResponse,
+    Messenger,
+    Organization,
+    Person,
+    PersonType,
+    Profile,
+    Role,
+    SessionPolicy,
+)
 from .webhook import BotResponse, WebhookPayload
 
 __all__ = [
@@ -95,4 +122,25 @@ __all__ = [
     "RoleUpdate",
     "MemberUpdate",
     "PrintFormItem",
+    # Knowledge Base (v0.8.0)
+    "KnowledgeBaseStructure",
+    "KnowledgeBaseStructureNode",
+    "KnowledgeBaseItem",
+    "KnowledgeBaseAttachment",
+    "KnowledgeBasePermissions",
+    # Awards (v0.8.0)
+    "AwardThreshold",
+    "MemberAwardCounter",
+    # Telephony / Calendar (v0.8.0)
+    "TelephonyMappingCode",
+    "CallMapping",
+    "TelephonyPersonRef",
+    "RegisterCallResponse",
+    "AttachCallRecordResponse",
+    "MeetingJoinParameters",
+    "Meeting",
+    "CalendarResponse",
+    # User nested (v0.8.0)
+    "Messenger",
+    "SessionPolicy",
 ]

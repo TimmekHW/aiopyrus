@@ -13,9 +13,15 @@ import aiofiles
 
 from aiopyrus.api.session import PyrusSession
 from aiopyrus.exceptions import PyrusFileSizeError, PyrusNotFoundError, PyrusPermissionError
+from aiopyrus.types.award import AwardThreshold, MemberAwardCounter
 from aiopyrus.types.catalog import Catalog, CatalogSyncResult
 from aiopyrus.types.file import UploadedFile
 from aiopyrus.types.form import Form
+from aiopyrus.types.knowledge_base import (
+    KnowledgeBaseItem,
+    KnowledgeBasePermissions,
+    KnowledgeBaseStructure,
+)
 from aiopyrus.types.task import (
     Announcement,
     ApprovalChoice,
@@ -23,6 +29,11 @@ from aiopyrus.types.task import (
     Task,
     TaskAction,
     TaskList,
+)
+from aiopyrus.types.telephony import (
+    AttachCallRecordResponse,
+    CallMapping,
+    RegisterCallResponse,
 )
 from aiopyrus.types.user import ContactsResponse, Person, Profile, Role
 
@@ -463,30 +474,75 @@ class UserClient:
     async def get_calendar(
         self,
         *,
-        from_date: str | None = None,
-        to_date: str | None = None,
+        start_date_utc: str | None = None,
+        end_date_utc: str | None = None,
+        include_meetings: bool | None = None,
         filter_mask: int | None = None,
         all_accessed_tasks: bool | None = None,
         item_count: int | None = None,
+        from_date: str | None = None,
+        to_date: str | None = None,
     ) -> list[Task]:
         """GET /calendar — scheduled tasks.
 
         Задачи из календаря.
 
         Args:
-            from_date: Начало периода (YYYY-MM-DD). По умолчанию — сегодня.
-            to_date:   Конец периода (YYYY-MM-DD). По умолчанию — +1 неделя.
+            start_date_utc: Начало периода — ISO 8601 datetime
+                (``"2026-05-29T00:00:00Z"``).  По умолчанию — сегодня.
+            end_date_utc:   Конец периода — ISO 8601 datetime.
+                По умолчанию — +1 неделя.
+            include_meetings: Включить календарные встречи в выдачу
+                (помимо задач со сроками).
             filter_mask: Битовая маска типов задач:
                 1 = Due, 2 = DueDate, 4 = DueForCurrentStep, 8 = Reminded.
                 Комбинируй через ``|``: ``filter_mask=1|4``.
             all_accessed_tasks: Включить задачи из всех доступных форм.
             item_count: Макс. количество задач (не более 100).
+            from_date: **Deprecated**. Старый параметр (``YYYY-MM-DD``).
+                Если задан — переадресуется в ``start_date_utc`` с полуночью UTC,
+                с ``DeprecationWarning``.
+            to_date: **Deprecated**. Аналог ``end_date_utc``.
+
+        Note:
+            В 2026 году Pyrus поменял имена параметров
+            ``from``/``to`` (только дата) на ``start_date_utc``/``end_date_utc``
+            (datetime) и добавил ``include_meetings``.  Старые параметры
+            ``from_date`` / ``to_date`` остаются как deprecated alias'ы
+            для обратной совместимости.
         """
         params: dict[str, Any] = {}
-        if from_date:
-            params["from"] = from_date
-        if to_date:
-            params["to"] = to_date
+
+        # Deprecated aliases → новые параметры
+        if from_date is not None:
+            import warnings
+
+            warnings.warn(
+                "from_date is deprecated; use start_date_utc instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            if start_date_utc is None:
+                start_date_utc = f"{from_date}T00:00:00Z" if "T" not in from_date else from_date
+        if to_date is not None:
+            import warnings
+
+            warnings.warn(
+                "to_date is deprecated; use end_date_utc instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            if end_date_utc is None:
+                end_date_utc = f"{to_date}T00:00:00Z" if "T" not in to_date else to_date
+
+        if start_date_utc:
+            params["start_date_utc"] = start_date_utc
+        if end_date_utc:
+            params["end_date_utc"] = end_date_utc
+        if include_meetings is not None:
+            # Pyrus ждёт "true"/"false" (не "y"/"n", как у других булевых
+            # параметров) — подтверждено live-probe на корп Pyrus 2026.
+            params["include_meetings"] = "true" if include_meetings else "false"
         if filter_mask is not None:
             params["filter_mask"] = filter_mask
         if all_accessed_tasks is not None:
@@ -1018,9 +1074,18 @@ class UserClient:
         item_count: int | None = None,
         include_archived: bool = False,
     ) -> list[Task]:
-        """POST /lists/{list_id}/tasks — задачи из конкретного списка.
+        """POST /lists/{list_id}/tasks — задачи из конкретного списка (POST вариант).
 
         Tasks in a specific list.
+
+        Note:
+            Pyrus принимает и ``GET /lists/{list_id}/tasks`` без тела —
+            обёртка для GET-варианта называется :meth:`get_list_tasks`.
+            POST-вариант здесь используется когда параметры фильтрации
+            могут быть громоздкими.
+
+            Pyrus also accepts ``GET /lists/{list_id}/tasks`` without a
+            body — use :meth:`get_list_tasks` for the GET variant.
         """
         payload: dict[str, Any] = {}
         if item_count is not None:
@@ -1029,6 +1094,95 @@ class UserClient:
             payload["include_archived"] = True
         data = await self._session.post(f"lists/{list_id}/tasks", json=payload or None)
         return [Task.model_validate(t) for t in data.get("tasks", [])]
+
+    async def get_list(self, list_id: int) -> TaskList:
+        """GET /lists/{list_id} — получить один список задач по ID.
+
+        Get a single task list (project / kanban board) by ID.
+
+        Example::
+
+            lst = await client.get_list(42)
+            print(lst.name, lst.list_type, len(lst.children))
+        """
+        data = await self._session.get(f"lists/{list_id}")
+        return TaskList.model_validate(data)
+
+    async def get_list_tasks(
+        self,
+        list_id: int,
+        *,
+        item_count: int | None = None,
+        include_archived: bool = False,
+    ) -> list[Task]:
+        """GET /lists/{list_id}/tasks — задачи из конкретного списка (REST вариант).
+
+        Tasks in a specific list (REST GET variant).
+
+        REST-эквивалент :meth:`get_task_list` (POST). Параметры
+        передаются как query-string — выбирай GET, когда параметров
+        мало; POST — когда нужен большой filter payload.
+
+        Example::
+
+            tasks = await client.get_list_tasks(42, item_count=100)
+        """
+        params: dict[str, Any] = {}
+        if item_count is not None:
+            params["item_count"] = item_count
+        if include_archived:
+            params["include_archived"] = "y"
+        data = await self._session.get(f"lists/{list_id}/tasks", params=params or None)
+        return [Task.model_validate(t) for t in data.get("tasks", [])]
+
+    async def update_list(
+        self,
+        list_id: int,
+        *,
+        name: str | None = None,
+        member_ids: list[int] | None = None,
+        manager_ids: list[int] | None = None,
+        added_member_ids: list[int] | None = None,
+        removed_member_ids: list[int] | None = None,
+    ) -> TaskList:
+        """POST /lists/{list_id} — обновить метаданные списка задач.
+
+        Update task list metadata (name, members, managers).
+
+        Note:
+            Pyrus использует один и тот же URL для **POST /lists/{id}**
+            (обновление метаданных, тело = ``{name, member_ids, ...}``)
+            и для :meth:`get_task_list` (получение задач,
+            ``POST /lists/{id}/tasks``).  Здесь — именно метаданные.
+
+            Pyrus uses the same URL pattern for metadata update and
+            task listing — disambiguated by sub-path ``/tasks``.
+
+        Args:
+            list_id: ID списка.
+            name: Новое название.
+            member_ids: Полная замена участников.
+            manager_ids: Полная замена менеджеров.
+            added_member_ids: Добавить участников (incremental).
+            removed_member_ids: Удалить участников (incremental).
+
+        Example::
+
+            await client.update_list(42, name="Архив 2026", added_member_ids=[100500])
+        """
+        payload: dict[str, Any] = {}
+        if name is not None:
+            payload["name"] = name
+        if member_ids is not None:
+            payload["member_ids"] = member_ids
+        if manager_ids is not None:
+            payload["manager_ids"] = manager_ids
+        if added_member_ids is not None:
+            payload["added_member_ids"] = added_member_ids
+        if removed_member_ids is not None:
+            payload["removed_member_ids"] = removed_member_ids
+        data = await self._session.post(f"lists/{list_id}", json=payload)
+        return TaskList.model_validate(data)
 
     # ------------------------------------------------------------------
     # Internal WCF API (experimental / on-premise)
@@ -1649,6 +1803,43 @@ class UserClient:
         data = await self._session.put(f"roles/{role_id}", json=payload)
         return Role.model_validate(data)
 
+    async def get_role(self, role_id: int) -> Role:
+        """GET /roles/{role_id} — получить одну роль по ID.
+
+        Get a single role by ID.
+
+        Example::
+
+            role = await client.get_role(42)
+            print(role.name, role.member_ids)
+        """
+        data = await self._session.get(f"roles/{role_id}")
+        return Role.model_validate(data)
+
+    async def delete_role(self, role_id: int, *, task_receiver_id: int) -> bool:
+        """DELETE /roles/{role_id} — удалить роль.
+
+        Delete a role. Pyrus requires ``task_receiver_id`` in the body —
+        the user/role that inherits open tasks assigned to the deleted role.
+
+        Pyrus требует ``task_receiver_id`` в теле запроса — это
+        пользователь/роль, которой переходят открытые задачи
+        удаляемой роли.
+
+        Args:
+            role_id: ID удаляемой роли.
+            task_receiver_id: Кому переходят задачи удаляемой роли.
+
+        Example::
+
+            await client.delete_role(42, task_receiver_id=100500)
+        """
+        # The session helper uses GET-style signature for delete; build payload via raw request.
+        data = await self._session.request(
+            "DELETE", f"roles/{role_id}", json={"task_receiver_id": task_receiver_id}
+        )
+        return bool(data.get("deleted", True))
+
     # ------------------------------------------------------------------
     # Announcements
     # ------------------------------------------------------------------
@@ -1846,3 +2037,335 @@ class UserClient:
         ]
         results = await asyncio.gather(*[self._bounded(c) for c in coros], return_exceptions=True)
         return list(results)
+
+    # ==================================================================
+    # Knowledge Base API (Pyrus v1.24, появилась 24.04.2026)
+    # ==================================================================
+    #
+    # База знаний — статьи и темы с разрешениями.  Особенность: ID
+    # элементов БЗ — строки (``"BxqPU8UrjlC"``), не int.
+
+    async def get_knowledge_base_structure(
+        self,
+        *,
+        parent_topic_id: str | None = None,
+        depth: int | None = None,
+    ) -> KnowledgeBaseStructure:
+        """GET /knowledgebase/structure — иерархия базы знаний.
+
+        Get knowledge base structure (recursive tree of topics + articles).
+
+        Args:
+            parent_topic_id: ID родительской темы — если задан, возвращается
+                только её поддерево.  По умолчанию — корень.
+            depth: Максимальная глубина обхода.
+
+        Example::
+
+            kb = await client.get_knowledge_base_structure()
+            for node in kb.items:
+                print(node.id, node.type, node.title)
+        """
+        params: dict[str, Any] = {}
+        if parent_topic_id is not None:
+            params["parent_topic_id"] = parent_topic_id
+        if depth is not None:
+            params["depth"] = depth
+        data = await self._session.get("knowledgebase/structure", params=params or None)
+        return KnowledgeBaseStructure.model_validate(data)
+
+    async def get_knowledge_base_item(self, item_id: str) -> KnowledgeBaseItem:
+        """GET /knowledgebase/{item_id} — статья или тема по ID.
+
+        Get a knowledge base item by string ID.
+
+        Note:
+            ``item_id`` — это **строка** (например ``"BxqPU8UrjlC"``),
+            не число. См. :class:`~aiopyrus.types.KnowledgeBaseItem`.
+        """
+        data = await self._session.get(f"knowledgebase/{item_id}")
+        return KnowledgeBaseItem.model_validate(data)
+
+    async def create_knowledge_base_item(
+        self,
+        *,
+        title: str,
+        type: str = "article",
+        parent_topic_id: str | None = None,
+        body: str | None = None,
+    ) -> KnowledgeBaseItem:
+        """POST /knowledgebase — создать статью или тему.
+
+        Create a knowledge base item.
+
+        Args:
+            title: Заголовок.
+            type: ``"article"`` или ``"topic"``.
+            parent_topic_id: ID родительской темы (опционально).
+            body: Markdown-текст — обязателен для статей.
+
+        Raises:
+            ValueError: если для ``type='article'`` не передан ``body``.
+        """
+        if type == "article" and not body:
+            raise ValueError("body is required when type='article'")
+        payload: dict[str, Any] = {"title": title, "type": type}
+        if parent_topic_id is not None:
+            payload["parent_topic_id"] = parent_topic_id
+        if body is not None:
+            payload["body"] = body
+        data = await self._session.post("knowledgebase", json=payload)
+        return KnowledgeBaseItem.model_validate(data)
+
+    async def update_knowledge_base_item(
+        self,
+        item_id: str,
+        *,
+        title: str | None = None,
+        body: str | None = None,
+        parent_topic_id: str | None = None,
+        parent_topic_id_changed: bool | None = None,
+    ) -> KnowledgeBaseItem:
+        """PUT /knowledgebase/{item_id} — обновить статью/тему.
+
+        Update a knowledge base item.
+
+        Note:
+            Если хочешь переместить элемент в корень (без родителя),
+            передай ``parent_topic_id=None, parent_topic_id_changed=True``.
+            Без второго флага ``None`` игнорируется (это not-set, не
+            «очистить родителя»).
+        """
+        payload: dict[str, Any] = {}
+        if title is not None:
+            payload["title"] = title
+        if body is not None:
+            payload["body"] = body
+        if parent_topic_id_changed is True:
+            payload["parent_topic_id"] = parent_topic_id  # may be None ⇒ move to root
+            payload["parent_topic_id_changed"] = True
+        elif parent_topic_id is not None:
+            payload["parent_topic_id"] = parent_topic_id
+        data = await self._session.put(f"knowledgebase/{item_id}", json=payload)
+        return KnowledgeBaseItem.model_validate(data)
+
+    async def delete_knowledge_base_item(
+        self,
+        item_id: str,
+        *,
+        delete_with_children: bool | None = None,
+    ) -> bool:
+        """DELETE /knowledgebase/{item_id} — удалить статью/тему.
+
+        Args:
+            delete_with_children: Если ``True`` — удалить вместе с
+                вложенными элементами.
+        """
+        params: dict[str, Any] = {}
+        if delete_with_children is not None:
+            params["delete_with_children"] = delete_with_children
+        data = await self._session.request(
+            "DELETE", f"knowledgebase/{item_id}", params=params or None
+        )
+        return bool(data.get("deleted", True))
+
+    async def get_knowledge_base_permissions(self, item_id: str) -> KnowledgeBasePermissions:
+        """GET /knowledgebase/{item_id}/permissions — разрешения элемента.
+
+        Get permissions for a knowledge base item.
+
+        Note:
+            Эндпоинт admin-gated: для обычного пользователя вернётся
+            403 ``knowledge_base_access_denied``.
+        """
+        data = await self._session.get(f"knowledgebase/{item_id}/permissions")
+        return KnowledgeBasePermissions.model_validate(data)
+
+    async def update_knowledge_base_permissions(
+        self,
+        item_id: str,
+        *,
+        inherit: bool | None = None,
+        readers: list[int] | None = None,
+        editors: list[int] | None = None,
+    ) -> KnowledgeBasePermissions:
+        """PUT /knowledgebase/{item_id}/permissions — обновить разрешения.
+
+        Note:
+            На вход — ``list[int]`` (ID людей), на выходе — ``list[Person]``
+            (объекты целиком). Это асимметрия API Pyrus.
+        """
+        payload: dict[str, Any] = {}
+        if inherit is not None:
+            payload["inherit"] = inherit
+        if readers is not None:
+            payload["readers"] = readers
+        if editors is not None:
+            payload["editors"] = editors
+        data = await self._session.put(f"knowledgebase/{item_id}/permissions", json=payload)
+        return KnowledgeBasePermissions.model_validate(data)
+
+    # ==================================================================
+    # Awards API (Pyrus v1.22+, cloud / fresh on-premise only)
+    # ==================================================================
+    #
+    # На legacy on-premise сборках эндпоинты могут вернуть 202 «No HTTP
+    # resource was found» — это значит, что Awards не развёрнуты на
+    # сервере.  Используй обычные try/except — мы не оборачиваем 202
+    # в специальную ошибку, чтобы не ломать совместимость остального
+    # API.
+
+    async def get_award_threshold(self, award_id: int) -> AwardThreshold:
+        """GET /awards/{award_id}/threshold — пороги выдачи/отзыва награды.
+
+        Note:
+            На legacy on-premise может вернуться 202 + не-JSON тело — это
+            «эндпоинт не развёрнут».
+        """
+        data = await self._session.get(f"awards/{award_id}/threshold")
+        return AwardThreshold.model_validate(data)
+
+    async def set_award_threshold(
+        self,
+        award_id: int,
+        *,
+        grant_threshold: int,
+        revoke_threshold: int,
+    ) -> AwardThreshold:
+        """PUT /awards/{award_id}/threshold — задать пороги награды.
+
+        Raises:
+            ValueError: если оба порога ненулевые и ``revoke_threshold``
+                не строго больше ``grant_threshold``.
+        """
+        if grant_threshold > 0 and revoke_threshold > 0 and revoke_threshold <= grant_threshold:
+            raise ValueError("revoke_threshold must exceed grant_threshold when both are non-zero")
+        payload = {
+            "grant_threshold": grant_threshold,
+            "revoke_threshold": revoke_threshold,
+        }
+        data = await self._session.put(f"awards/{award_id}/threshold", json=payload)
+        return AwardThreshold.model_validate(data)
+
+    async def get_member_award_counter(self, member_id: int, award_id: int) -> MemberAwardCounter:
+        """GET /members/{member_id}/awards/{award_id}/counter — счётчик награды."""
+        data = await self._session.get(f"members/{member_id}/awards/{award_id}/counter")
+        return MemberAwardCounter.model_validate(data)
+
+    async def increment_member_award_counter(
+        self, member_id: int, award_id: int
+    ) -> MemberAwardCounter:
+        """POST /members/{member_id}/awards/{award_id}/counter/increment — увеличить счётчик."""
+        data = await self._session.post(
+            f"members/{member_id}/awards/{award_id}/counter/increment",
+            json={},
+        )
+        return MemberAwardCounter.model_validate(data)
+
+    async def set_member_award_counter(
+        self, member_id: int, award_id: int, *, value: int
+    ) -> MemberAwardCounter:
+        """PUT /members/{member_id}/awards/{award_id}/counter — выставить счётчик.
+
+        Note:
+            ``value`` передаётся как **query-string** (``?value=N``),
+            не в теле — особенность Pyrus API.
+        """
+        # PUT через _session.request — params вместо json
+        data = await self._session.request(
+            "PUT",
+            f"members/{member_id}/awards/{award_id}/counter",
+            params={"value": value},
+        )
+        return MemberAwardCounter.model_validate(data)
+
+    # ==================================================================
+    # Telephony — интеграция с call-центром (Zadarma, asterisk и др.)
+    # ==================================================================
+
+    async def register_call(
+        self,
+        *,
+        account_id: str,
+        from_number: str,
+        to_number: str,
+        internal_number: str | None = None,
+        external_id: str | None = None,
+        mappings: list[CallMapping] | None = None,
+    ) -> RegisterCallResponse:
+        """POST /integrations/call — зарегистрировать звонок.
+
+        Args:
+            account_id: ID аккаунта телефонии (из настроек интеграции).
+            from_number: Номер откуда.
+            to_number: Номер куда.
+            internal_number: Внутренний номер сотрудника, если есть.
+            external_id: Внешний ID звонка (для последующего
+                :meth:`attach_call_record`).
+            mappings: Дополнительные данные (время, длительность,
+                рейтинг) в виде :class:`CallMapping`.
+
+        Returns:
+            RegisterCallResponse с ``task_id`` созданной задачи (если
+            форма звонков настроена) и ``responsible_person``.
+        """
+        payload: dict[str, Any] = {
+            "account_id": account_id,
+            "from": from_number,
+            "to": to_number,
+        }
+        if internal_number is not None:
+            payload["internal_number"] = internal_number
+        if external_id is not None:
+            payload["external_id"] = external_id
+        if mappings is not None:
+            payload["mappings"] = [m.model_dump() for m in mappings]
+        data = await self._session.post("integrations/call", json=payload)
+        return RegisterCallResponse.model_validate(data)
+
+    async def attach_call_record(
+        self,
+        *,
+        account_id: str,
+        record_file: str,
+        task_id: int | None = None,
+        external_id: str | None = None,
+        from_number: str | None = None,
+        to_number: str | None = None,
+        mappings: list[CallMapping] | None = None,
+    ) -> AttachCallRecordResponse:
+        """POST /integrations/attachcallrecord — прикрепить запись звонка.
+
+        Args:
+            account_id: ID аккаунта телефонии.
+            record_file: GUID загруженного файла (из :meth:`upload_file`).
+                Допустимые форматы: ac3, mp3, ogg, wav, wma.
+            task_id: ID задачи звонка (если знаем).
+            external_id: Или внешний ID звонка из :meth:`register_call`.
+            from_number, to_number: Или пара номеров для поиска задачи.
+
+        Raises:
+            ValueError: если не передан ни ``task_id``, ни ``external_id``,
+                ни пара ``from_number+to_number``.
+        """
+        has_task = task_id is not None
+        has_external = external_id is not None
+        has_phones = from_number is not None and to_number is not None
+        if not (has_task or has_external or has_phones):
+            raise ValueError("Must supply task_id, external_id, or both from_number+to_number")
+        payload: dict[str, Any] = {
+            "account_id": account_id,
+            "record_file": record_file,
+        }
+        if task_id is not None:
+            payload["task_id"] = task_id
+        if external_id is not None:
+            payload["external_id"] = external_id
+        if from_number is not None:
+            payload["from"] = from_number
+        if to_number is not None:
+            payload["to"] = to_number
+        if mappings is not None:
+            payload["mappings"] = [m.model_dump() for m in mappings]
+        data = await self._session.post("integrations/attachcallrecord", json=payload)
+        return AttachCallRecordResponse.model_validate(data)

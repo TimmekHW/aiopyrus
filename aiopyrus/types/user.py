@@ -15,6 +15,39 @@ class PersonType(str, Enum):
     bot = "bot"
 
 
+class Messenger(PyrusModel):
+    """Messenger contact embedded in a Person record.
+
+    Контакт мессенджера, встроенный в карточку сотрудника. Возвращается
+    Pyrus как ``{"type": "...", "nickname": "..."}``.  Это узкая типизация
+    того, что раньше было ``dict[str, Any]`` — IDE-автокомплит, при этом
+    ``extra="ignore"`` (на ``PyrusModel``) сохраняет forward-compat
+    для будущих ключей.
+    """
+
+    type: str | None = None
+    nickname: str | None = None
+
+
+class SessionPolicy(PyrusModel):
+    """Admin session-policy block returned on every ``Person`` on corp/on-premise.
+
+    Политика админ-сессий, прикреплённая к карточке сотрудника на корп /
+    on-premise. На облаке отсутствует.  Все шесть полей ``Person`` —
+    ``mobile_session_settings``, ``mobile_session_inactive_settings``,
+    ``mobile_session_restriction_settings``, ``web_session_settings``,
+    ``web_session_inactive_settings``, ``web_session_restriction_settings``
+    — используют этот класс.
+
+    Поля свободны (``str | int | None``) — серверная схема разнится
+    между инстансами и со временем; ``extra="ignore"`` сохраняет
+    forward-compat.
+    """
+
+    life_span_hours: int | None = None
+    max_count: int | None = None
+
+
 class Person(PyrusModel):
     """Represents a Pyrus user, role, or bot."""
 
@@ -42,13 +75,27 @@ class Person(PyrusModel):
     task_receiver: int | None = None
     # External ID (corp / on-premise instances — maps to AD, 1C, etc.)
     external_id: int | None = None
+    # Organisation ID (typically populated on synthetic system users in
+    # comment.author and on corp instances; mirrors Profile.organization_id)
+    organization_id: int | None = None
     # Avatar
     avatar_id: int | None = None
     external_avatar_id: int | None = None
     # Location / messenger
     location: str | None = None  # physical city / office (e.g. "Владивосток")
     skype: str | None = None
-    messenger: dict[str, Any] | None = None  # {"type": "Internet", "nickname": "..."}
+    messenger: Messenger | None = None
+    # Date of birth — Pyrus returns ``{"day": int, "month": int}`` (year
+    # optional on cloud).  Kept as loose ``dict[str, Any]`` to match the
+    # house style for opaque sub-objects.
+    birth_date: dict[str, Any] | None = None
+    # ── Admin session policy (corp / on-premise only, omitted on cloud) ──
+    mobile_session_settings: SessionPolicy | None = None
+    mobile_session_inactive_settings: SessionPolicy | None = None
+    mobile_session_restriction_settings: SessionPolicy | None = None
+    web_session_settings: SessionPolicy | None = None
+    web_session_inactive_settings: SessionPolicy | None = None
+    web_session_restriction_settings: SessionPolicy | None = None
 
     @field_validator("external_id", mode="before")
     @classmethod
