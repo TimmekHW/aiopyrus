@@ -67,13 +67,20 @@ class Person(PyrusModel):
 
 
 class Role(PyrusModel):
-    """Represents a Pyrus role (group of people)."""
+    """Represents a Pyrus role (group of people).
+
+    Note:
+        ``fired`` and ``banned`` are populated only on Pyrus **cloud**.
+        On-premise / corp instances omit these keys from the role payload,
+        so the ``False`` default does **not** reflect the actual role state
+        on a corp deployment — never rely on it there.
+    """
 
     id: int
     name: str
     member_ids: list[int] = []
-    fired: bool = False  # archived / deleted role
-    banned: bool = False  # disabled role
+    fired: bool = False  # archived / deleted role (cloud only — see class docstring)
+    banned: bool = False  # disabled role (cloud only — see class docstring)
 
 
 class Organization(PyrusModel):

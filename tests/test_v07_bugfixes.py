@@ -84,6 +84,70 @@ class TestChannelTypeForwardCompat:
         assert c.channel.type == "future_channel_we_dont_know"
 
 
+# ── v0.7.3: Channel.direction (inbound / outbound) ──────────────────────────
+
+
+class TestChannelDirection:
+    """Регрессионные тесты для поля ``Channel.direction``.
+
+    В живом probe Pyrus 2026 у комментариев боты выставляли
+    ``channel.direction='outbound'``. Раньше это поле сбрасывалось
+    через ``extra="ignore"`` и было невидимо для пользователей.
+    """
+
+    def test_direction_outbound(self):
+        ch = Channel.model_validate({"type": "telegram", "direction": "outbound"})
+        assert ch.direction == "outbound"
+        assert ch.type == "telegram"
+
+    def test_direction_inbound(self):
+        ch = Channel.model_validate({"type": "email", "direction": "inbound"})
+        assert ch.direction == "inbound"
+
+    def test_direction_absent_defaults_to_none(self):
+        ch = Channel.model_validate({"type": "email"})
+        assert ch.direction is None
+
+    def test_direction_unknown_value_kept_as_str(self):
+        """Forward-compat: будущее значение ``direction`` не падает."""
+        ch = Channel.model_validate({"type": "email", "direction": "future_value"})
+        assert ch.direction == "future_value"
+
+    def test_full_comment_with_direction_parses(self):
+        c = Comment.model_validate(
+            {
+                "id": 1837495685,
+                "channel": {"type": "telegram", "direction": "outbound"},
+            }
+        )
+        assert c.channel is not None
+        assert c.channel.direction == "outbound"
+
+    def test_task_with_outbound_comment_parses(self):
+        """Реалистичный кейс из живого probe Pyrus 2026."""
+        task = Task.model_validate(
+            {
+                "id": 125618897,
+                "comments": [
+                    {
+                        "id": 1837495685,
+                        "channel": {"type": "telegram", "direction": "outbound"},
+                    },
+                    {
+                        "id": 1837495686,
+                        "channel": {"type": "telegram", "direction": "inbound"},
+                    },
+                ],
+            }
+        )
+        assert task.id == 125618897
+        ch0 = task.comments[0].channel
+        ch1 = task.comments[1].channel
+        assert ch0 is not None and ch1 is not None
+        assert ch0.direction == "outbound"
+        assert ch1.direction == "inbound"
+
+
 # ── Bug #2: find_member accepts numeric strings as person_id ────────────────
 
 

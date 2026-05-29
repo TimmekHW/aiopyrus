@@ -5,6 +5,42 @@ All notable changes to **aiopyrus** will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
+## [0.7.3] — 2026-05-29
+
+### Добавлено
+- **`Channel.direction`** — поле направления внешнего канала
+  (`"inbound"` / `"outbound"`). Подтверждено живьём на on-premise
+  Pyrus 2026: бот-сгенерированные комментарии приходят с
+  `channel.direction='outbound'`. Раньше silently dropped через
+  `extra="ignore"`. Полезно ботам, которые должны игнорировать
+  собственный исходящий трафик и реагировать только на входящие
+  сообщения клиентов. Тип — свободный `str` для forward-compat,
+  как и `Channel.type`.
+
+### Документация
+- В методы журнала событий (`get_event_history`,
+  `get_file_access_history`, `get_task_access_history`,
+  `get_task_export_history`, `get_registry_download_history`) добавлен
+  блок `Raises`: `PyrusPermissionError` (`403 access_denied`) бросается,
+  когда у аккаунта нет роли доступа к журналу безопасности. Нахождение
+  на on-premise инстансе **не достаточно** — администратор должен выдать
+  отдельную роль доступа к журналу. Это была самая частая жалоба
+  «`aiopyrus` сломан».
+- `Role.fired` / `Role.banned` помечены как **cloud-only** поля.
+  On-premise инстансы не возвращают эти ключи; дефолт `False` не
+  отражает реальное состояние роли там.
+- `TaskStep` — добавлено замечание о том, что номера шагов
+  могут быть **непоследовательными** при ветвлении маршрута
+  (например, `steps=[1, 2, 4]` если шаг 3 был пропущен).
+
+### Проверено
+- aiopyrus 0.7.2 → 0.7.3 против Pyrus Datacenter on-premise
+  (после апгрейда v1.22 → v1.23 → v1.24) — **ноль ошибок валидации**
+  на 24 живых вызовах эндпоинтов; все 22 уникальных значения
+  `FieldType` и все 22 ключа `Comment` парсятся корректно.
+  Апгрейд 2026 для aiopyrus не-breaking.
+
+---
 ## [0.7.2] — 2026-05-28
 
 ### Fixed

@@ -75,6 +75,11 @@ class Channel(PyrusModel):
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
 
     type: str | None = None
+    # ``inbound`` (customer → Pyrus) / ``outbound`` (Pyrus → customer).
+    # Useful for bots that should react to incoming messages but ignore
+    # the comments they themselves produced.  Free-form ``str`` for
+    # forward-compat, mirroring ``type``.
+    direction: str | None = None
     to: ChannelContact | None = None
     # ``from`` is a reserved keyword in Python — alias maps "from" → from_
     from_: ChannelContact | None = Field(None, alias="from")
@@ -207,6 +212,11 @@ class TaskStep(PyrusModel):
     """Workflow step progress embedded in a task response.
 
     Шаг маршрута внутри ответа по задаче — имя этапа + затраченное время.
+
+    Note:
+        ``step`` numbers may be **non-contiguous** when the workflow branches
+        and some steps are skipped — e.g. ``steps=[1, 2, 4]`` on a task that
+        was routed past step 3. Do not assume sequential numbering.
     """
 
     step: int

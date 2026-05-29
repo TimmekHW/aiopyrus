@@ -779,6 +779,12 @@ class UserClient:
         Args:
             after: Вернуть события с ID >= этого значения.
             count: Количество событий (макс. 100 000).
+
+        Raises:
+            PyrusPermissionError: ``403 access_denied`` when the account lacks
+                the security-log access role. Being on a Pyrus server
+                (on-premise) instance alone is **not** sufficient — an admin
+                must explicitly grant the role on top of on-premise access.
         """
         params: dict[str, Any] = {}
         if after is not None:
@@ -802,6 +808,12 @@ class UserClient:
         Args:
             after: Вернуть события с ID >= этого значения.
             count: Количество событий (макс. 100 000).
+
+        Raises:
+            PyrusPermissionError: ``403 access_denied`` when the account lacks
+                the security-log access role. Being on a Pyrus server
+                (on-premise) instance alone is **not** sufficient — an admin
+                must explicitly grant the role on top of on-premise access.
         """
         params: dict[str, Any] = {}
         if after is not None:
@@ -825,6 +837,12 @@ class UserClient:
         Args:
             after: Вернуть события с ID >= этого значения.
             count: Количество событий (макс. 100 000).
+
+        Raises:
+            PyrusPermissionError: ``403 access_denied`` when the account lacks
+                the security-log access role. Being on a Pyrus server
+                (on-premise) instance alone is **not** sufficient — an admin
+                must explicitly grant the role on top of on-premise access.
         """
         params: dict[str, Any] = {}
         if after is not None:
@@ -848,6 +866,12 @@ class UserClient:
         Args:
             after: Вернуть события с ID >= этого значения.
             count: Количество событий (макс. 100 000).
+
+        Raises:
+            PyrusPermissionError: ``403 access_denied`` when the account lacks
+                the security-log access role. Being on a Pyrus server
+                (on-premise) instance alone is **not** sufficient — an admin
+                must explicitly grant the role on top of on-premise access.
         """
         params: dict[str, Any] = {}
         if after is not None:
@@ -871,6 +895,12 @@ class UserClient:
         Args:
             after: Вернуть события с ID >= этого значения.
             count: Количество событий (макс. 100 000).
+
+        Raises:
+            PyrusPermissionError: ``403 access_denied`` when the account lacks
+                the security-log access role. Being on a Pyrus server
+                (on-premise) instance alone is **not** sufficient — an admin
+                must explicitly grant the role on top of on-premise access.
         """
         params: dict[str, Any] = {}
         if after is not None:
