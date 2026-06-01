@@ -20,12 +20,52 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - run: pip install build
-      - run: python -m build
+      - name: Build sdist + wheel
+        run: |
+          uv pip install --system build
+          python -m build
+
+      - name: Verify wheel integrity
+        # Защита от того же класса бага, что сломал SCB-сборку (wheel без
+        # вложенных пакетов).  Открываем собранный wheel и проверяем,
+        # что все ключевые модули на месте — иначе CI падает и битый
+        # релиз не уезжает в PyPI.
+        run: |
+          python <<'PY'
+          import glob, sys, zipfile
+          whls = glob.glob("dist/*.whl")
+          assert whls, "no wheel produced"
+          z = zipfile.ZipFile(whls[0])
+          names = set(z.namelist())
+          required = [
+              "aiopyrus/__init__.py",
+              "aiopyrus/bot/bot.py",
+              "aiopyrus/bot/dispatcher.py",
+              "aiopyrus/bot/router.py",
+              "aiopyrus/bot/filters/__init__.py",
+              "aiopyrus/bot/webhook/server.py",
+              "aiopyrus/types/__init__.py",
+              "aiopyrus/types/award.py",
+              "aiopyrus/types/knowledge_base.py",
+              "aiopyrus/types/telephony.py",
+              "aiopyrus/user/client.py",
+              "aiopyrus/utils/context.py",
+              "aiopyrus/api/session.py",
+              "aiopyrus/py.typed",
+          ]
+          missing = [r for r in required if r not in names]
+          if missing:
+              sys.exit(f"wheel is broken — missing: {missing}")
+          print(f"wheel OK: {len(names)} files, sha is fine")
+          PY
 
       - uses: actions/upload-artifact@v4
         with:
