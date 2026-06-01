@@ -20,24 +20,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: astral-sh/setup-uv@v3
-        with:
-          enable-cache: true
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
       - name: Build sdist + wheel
         run: |
-          uv pip install --system build
+          pip install build
           python -m build
 
       - name: Verify wheel integrity
         # Защита от того же класса бага, что сломал SCB-сборку (wheel без
-        # вложенных пакетов).  Открываем собранный wheel и проверяем,
-        # что все ключевые модули на месте — иначе CI падает и битый
-        # релиз не уезжает в PyPI.
+        # вложенных пакетов). Открываем собранный wheel и проверяем, что все
+        # ключевые модули на месте — иначе CI падает и битый релиз не уезжает
+        # в PyPI.
         run: |
           python <<'PY'
           import glob, sys, zipfile
@@ -64,7 +60,7 @@ jobs:
           missing = [r for r in required if r not in names]
           if missing:
               sys.exit(f"wheel is broken — missing: {missing}")
-          print(f"wheel OK: {len(names)} files, sha is fine")
+          print(f"wheel OK: {len(names)} files")
           PY
 
       - uses: actions/upload-artifact@v4
