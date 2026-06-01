@@ -355,6 +355,7 @@ class TestStartWebhook:
                 bot=bot,
                 path="/pyrus",
                 verify_signature=True,
+                save_webhooks_dir=None,
             )
             mock_run.assert_called_once_with(mock_app, host="127.0.0.1", port=9090)
 

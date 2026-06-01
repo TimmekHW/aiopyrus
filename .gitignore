@@ -35,3 +35,7 @@ test_live_remote.py
 _*.py
 !__init__.py
 _*.txt
+
+# Локальный output webhook-архива (save_raw_webhook dumps)
+pyrus_webhooks/
+_no_task_id/

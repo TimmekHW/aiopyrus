@@ -3,10 +3,12 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from aiohttp import web
 
+from aiopyrus.bot.webhook.archive import save_raw_webhook
 from aiopyrus.exceptions import PyrusWebhookSignatureError
 
 if TYPE_CHECKING:
@@ -22,13 +24,23 @@ def create_app(
     bot: PyrusBot,
     path: str = "/",
     verify_signature: bool = True,
+    save_webhooks_dir: str | Path | None = None,
 ) -> web.Application:
-    """Build an aiohttp Application for the Pyrus webhook endpoint."""
+    """Build an aiohttp Application for the Pyrus webhook endpoint.
+
+    Parameters
+    ----------
+    save_webhooks_dir:
+        If set, **every** incoming webhook (including retries and malformed
+        bodies) is archived to this directory, one sub-folder per task id.
+        ``None`` (default) disables archiving.
+    """
 
     app = web.Application()
     app["dispatcher"] = dispatcher
     app["bot"] = bot
     app["verify_signature"] = verify_signature
+    app["save_webhooks_dir"] = save_webhooks_dir
 
     app.router.add_post(path, _webhook_handler)
     return app
@@ -49,6 +61,25 @@ async def _webhook_handler(request: web.Request) -> web.Response:
         retry,
         len(raw_body),
     )
+
+    # Archive EVERY incoming webhook (before parsing/validation) so even malformed
+    # bodies and retries are preserved. One folder per task; never breaks handling.
+    save_dir = request.app.get("save_webhooks_dir")
+    if save_dir:
+        try:
+            _archive_payload = json.loads(raw_body)
+        except Exception:
+            _archive_payload = None
+        await save_raw_webhook(
+            save_dir,
+            raw_body,
+            _archive_payload,
+            headers={
+                "X-Pyrus-Sig": signature,
+                "X-Pyrus-Retry": retry,
+                "Content-Type": request.headers.get("Content-Type", ""),
+            },
+        )
 
     try:
         payload_data: dict = json.loads(raw_body)

@@ -5,6 +5,54 @@ All notable changes to **aiopyrus** will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
+## [0.8.1] — 2026-06-01
+
+### Добавлено — архив входящих вебхуков
+
+- **`save_raw_webhook(base_dir, raw_body, payload_data, headers)`** —
+  утилита, которая сохраняет один входящий вебхук на диск в layout
+  «одна папка на задачу, много файлов в папке»::
+
+      <base_dir>/<task_id>/<YYYYMMDD_HHMMSS_ffffff>_<seq>.json
+
+  Каждый файл — самодостаточный envelope: `received_at`, `task_id`,
+  `headers` (включая `X-Pyrus-Sig`, `X-Pyrus-Retry`), `body`
+  (распарсенный JSON либо `_raw_text` при невалидном JSON).
+  Функция **никогда не бросает** — архивирование не должно
+  ломать обработку вебхуков. Дисковый I/O вынесен в worker-поток
+  через `asyncio.to_thread`. Имена файлов лексикографически
+  упорядочены по времени поступления (timestamp + monotonic
+  счётчик), даже когда тысячи вебхуков приходят в одной
+  микросекунде.
+
+- **`create_app(..., save_webhooks_dir=)`** — новый параметр у
+  фабрики aiohttp-приложения. Когда задан, **каждый** входящий
+  вебхук (включая retry-доставки и невалидный JSON) архивируется
+  в указанную директорию **до** парсинга и верификации подписи.
+
+- **`Dispatcher.start_webhook(..., save_webhooks_dir=)`** — тот же
+  параметр пробрасывается из вершины публичного API.
+
+Use case: сбор реальных webhook-payload'ов с production для
+последующего анализа — отладка фильтров, обратная инженерия
+shape'а полей, аудит, регрессионное тестирование.
+
+Тесты: +12 в `test_webhook_archive.py` (всего ~1012 passed).
+
+### CI / CD
+
+- **Проверка целостности wheel** перед публикацией в PyPI:
+  после `python -m build` открываем wheel и убеждаемся, что
+  все ключевые модули (`aiopyrus/bot/bot.py`, `aiopyrus/types/*`,
+  `aiopyrus/py.typed` и др.) присутствуют. Защищает от класса
+  багов, когда сборка теряет вложенные пакеты — в этом случае
+  pipeline падает, и битый wheel не уезжает в PyPI.
+
+- `[build-system] requires = ["hatchling>=1.21.0"]` — явная
+  нижняя граница, чтобы поведение `packages = ["aiopyrus"]`
+  оставалось предсказуемым на разных билд-окружениях.
+
+---
 ## [0.8.0] — 2026-05-29
 
 Большой релиз поддержки Pyrus 2026 (после апгрейда Datacenter

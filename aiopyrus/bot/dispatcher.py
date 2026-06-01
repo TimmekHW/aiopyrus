@@ -485,6 +485,7 @@ class Dispatcher(Router):
         port: int = 8080,
         path: str = "/",
         verify_signature: bool = True,
+        save_webhooks_dir: str | None = None,
         on_startup: Any = None,
         on_shutdown: Any = None,
     ) -> None:
@@ -502,12 +503,22 @@ class Dispatcher(Router):
             URL path for the webhook endpoint (e.g. ``"/pyrus"``).
         verify_signature:
             Whether to verify the ``X-Pyrus-Sig`` header on each request.
+        save_webhooks_dir:
+            If set, archive **every** incoming webhook to this directory,
+            one sub-folder per task id (see :func:`save_raw_webhook`).
+            ``None`` (default) disables archiving.
         on_startup / on_shutdown:
             Optional async callables executed at server start/stop.
         """
         from aiopyrus.bot.webhook.server import create_app, run_app
 
-        app = create_app(dispatcher=self, bot=bot, path=path, verify_signature=verify_signature)
+        app = create_app(
+            dispatcher=self,
+            bot=bot,
+            path=path,
+            verify_signature=verify_signature,
+            save_webhooks_dir=save_webhooks_dir,
+        )
 
         if on_startup:
             app.on_startup.append(lambda _app: on_startup())
