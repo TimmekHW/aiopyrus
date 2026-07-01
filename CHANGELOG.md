@@ -5,7 +5,7 @@ All notable changes to **aiopyrus** will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
-## [0.9.0] — 2026-06-25
+## [0.9.1] — 2026-06-25
 
 ### Добавлено — редактирование таблиц как DataFrame
 
