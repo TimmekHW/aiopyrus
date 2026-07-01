@@ -118,6 +118,47 @@ Python 3.10+
 | `await ctx.reassign("Name")` | Reassign (name → person_id auto) |
 | `await ctx.log_time(90, "text")` | Log time spent (minutes) |
 | `await ctx.reply(comment_id, "text")` | Reply to a comment (threaded) |
+| `await ctx.table("Table")` | Open a table field as a DataFrame (see below) |
+
+## Tables — DataFrame-style
+
+A table field is opened with `await ctx.table("Name")` and worked with
+**by column names** — no `row_id`, `col_id`, or cell formats. Values
+auto-resolve (person name → `person_id`, `True/False` → checkmark,
+catalog string → `item_id`). Edits are lazy and flushed in one request
+on `ctx.answer()`, together with regular `fill()`s.
+
+```python
+ctx = await client.task_context(12345678)
+tbl = await ctx.table("Execution plan")
+
+# ── Read — like pandas / a list ──
+print(tbl.columns)
+print(len(tbl))
+print(tbl)                  # pretty ASCII render of the whole table
+for row in tbl:
+    print(row["Task"], "→", row["Assignee"], row["Done"])
+
+# ── Filter — like SQLAlchemy ──
+todo = tbl.where(**{"Done": False})           # bool → exact match
+mine = tbl.where(**{"Assignee": "Smith"})     # str → case-insensitive substring
+row  = tbl.find(**{"Task": "Archive review"})
+
+# ── Edit — like Excel ──
+row["Done"] = True                            # tick the checkbox
+for r in tbl.where(**{"Done": False}):
+    r["Assignee"] = "John Smith"              # name → person_id auto
+
+# ── Add / delete rows ──
+tbl.add(**{"Task": "New task", "Assignee": "John Smith", "Done": False})
+tbl.find(**{"Task": "stale entry"}).delete()
+
+# ── Send — all in one request ──
+await ctx.answer("Updated the plan")
+```
+
+Column names with spaces go through `**{"Column name": value}`.
+Full example — [`examples/14_table_editing.py`](examples/14_table_editing.py).
 
 ## Webhook Bot
 
@@ -400,13 +441,13 @@ async with mock as client:
 
 ```python
 # Re-request approval (reset step to "waiting")
-await client.comment_task(task_id, approvals_rerequested=[[141636]])
+await client.comment_task(task_id, approvals_rerequested=[[100500]])
 
 # Add approver to a step
-await client.comment_task(task_id, approvals_added=[[{"id": 141636}]])
+await client.comment_task(task_id, approvals_added=[[{"id": 100500}]])
 
 # Remove approver from a step
-await client.comment_task(task_id, approvals_removed=[{"id": 141636}])
+await client.comment_task(task_id, approvals_removed=[{"id": 100500}])
 ```
 
 Pyrus bots combine `approvals_removed` + `approvals_added` to switch tasks between workflow steps.
@@ -551,6 +592,7 @@ See [`examples/`](examples/) — 12 files from simple to advanced:
 | [`11_http_integration.py`](examples/11_http_integration.py) | HTTP server for external systems (PHP, 1C, etc.) |
 | [`12_embed_in_project.py`](examples/12_embed_in_project.py) | Embedding aiopyrus into FastAPI / Django / Celery |
 | [`13_debug_logging.py`](examples/13_debug_logging.py) | Debug: see what the library actually sends to Pyrus (URL, body, status, timing) |
+| [`14_table_editing.py`](examples/14_table_editing.py) | Table fields as a DataFrame: read, where/find, edit, add/delete rows |
 
 ## FAQ
 

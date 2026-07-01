@@ -5,6 +5,55 @@ All notable changes to **aiopyrus** will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
+## [0.9.0] — 2026-06-25
+
+### Добавлено — редактирование таблиц как DataFrame
+
+Поле типа «таблица» теперь редактируется через удобный
+DataFrame-подобный API — по **именам колонок**, без знания
+`row_id`, `col_id` и форматов ячеек.
+
+- **`await ctx.table("Имя")`** → :class:`TableProxy`. Открывает
+  поле-таблицу. Кешируется в контексте: повторный вызов возвращает
+  тот же объект с накопленными правками.
+
+- **Чтение — как pandas**: `tbl.columns`, `len(tbl)`, `tbl[i]`,
+  итерация `for row in tbl`, `row["Колонка"]`, `row.to_dict()`,
+  `tbl.to_records()`. `print(tbl)` рисует красивую ASCII-таблицу.
+
+- **Фильтрация — как SQLAlchemy**: `tbl.where(**{"Колонка": значение})`
+  и `tbl.find(...)`. Для `str` — регистронезависимая подстрока,
+  для `bool` / чисел — точное совпадение.
+
+- **Правка — как Excel**: `row["Колонка"] = value` (ленивая),
+  `row.update({...})`, `tbl.add(**{...})`, `row.delete()`,
+  `tbl.remove(row)`, `tbl.clear()`.
+
+- **Авторезолв значений в ячейках** — та же логика, что у `ctx.fill()`:
+  имя человека → `person_id`, `True`/`False` → `"checked"`/`"unchecked"`,
+  название варианта → `choice_id`, строка каталога → `item_id`,
+  текст/число — как есть.
+
+- **Ленивая отправка**: все правки таблиц уходят одним запросом
+  при `ctx.answer()` / `ctx.approve()` / `ctx.finish()`, вместе с
+  обычными `ctx.fill()`. `ctx.pending_count()` и `ctx.discard()`
+  учитывают правки таблиц.
+
+Новые публичные типы: `TableProxy`, `Row`, `Column`
+(экспортируются из `aiopyrus`). Метод `TaskContext.table()`.
+
+Особенность Pyrus: у непроставленной галочки API вообще не
+присылает ячейку — при чтении такое значение трактуется как `False`
+(подтверждено live).
+
+Пример: [`examples/14_table_editing.py`](examples/14_table_editing.py).
+Тесты: +19 (всего ~1032 passed).
+
+Подтверждено живьём на on-premise (форма с таблицей «План работ»,
+колонки text / person / checkmark): чтение, ASCII-рендер, резолв имён,
+сборка payload на добавление/правку/удаление строк.
+
+---
 ## [0.8.1] — 2026-06-01
 
 ### Добавлено — архив входящих вебхуков

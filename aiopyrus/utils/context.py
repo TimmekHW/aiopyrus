@@ -376,6 +376,8 @@ class TaskContext:
         self._task = task
         self._client = client
         self._pending: list[tuple[FormField, Any]] = []
+        self._tables: dict[int, Any] = {}  # field_id → TableProxy (lazy)
+        self._form: Any | None = None  # cached Form (lazy, for table columns / catalogs)
 
     # ------------------------------------------------------------------
     # Reading
@@ -488,9 +490,78 @@ class TaskContext:
     set = fill
     put = fill
 
+    async def _get_form(self) -> Any:
+        """Lazily fetch (and cache) the form definition for this task."""
+        if self._form is None:
+            form_id = self._task.form_id
+            if form_id is None:
+                raise ValueError(
+                    f"Task {self._task.id} has no form_id — cannot load form definition."
+                )
+            self._form = await self._client.get_form(form_id)
+        return self._form
+
+    async def table(self, field_name: str) -> Any:
+        """Open a table field as a DataFrame-like :class:`~aiopyrus.utils.table.TableProxy`.
+
+        Открыть поле-таблицу как DataFrame — доступ по именам колонок,
+        фильтрация, правка, добавление/удаление строк. Изменения ленивые —
+        отправляются вместе с обычными ``fill()`` при следующем
+        ``answer()`` / ``approve()`` / ``finish()``.
+
+        Повторный вызов ``ctx.table("...")`` для той же таблицы возвращает
+        **тот же** объект с накопленными изменениями.
+
+        Example::
+
+            tbl = await ctx.table("План выполнения")
+            for row in tbl.where(Выполнено=False):
+                row["Ответственный"] = "Колбасенко"
+            tbl.add(**{"Что сделать": "Новое", "Выполнено": False})
+            await ctx.answer("Обновил план")
+
+        Raises:
+            KeyError:   поле не найдено в задаче.
+            TypeError:  поле не является таблицей.
+        """
+        from aiopyrus.utils.table import TableProxy, build_columns, build_rows
+
+        field = self._task.get_field(field_name)
+        if field is None:
+            raise KeyError(
+                f"Field {field_name!r} not found in task {self._task.id}. "
+                f"Use task.find_fields(name='{field_name}') to inspect."
+            )
+        ftype = field.type.value if field.type else None
+        if ftype != "table":
+            raise TypeError(
+                f"Field {field_name!r} (id={field.id}) is {ftype!r}, not 'table'. "
+                f"Use ctx['{field_name}'] for scalar fields."
+            )
+
+        if field.id in self._tables:
+            return self._tables[field.id]
+
+        # Load column metadata from the form definition (covers columns that
+        # are empty in every row); fall back to row cells if the form is
+        # unavailable.
+        form_field = None
+        try:
+            form = await self._get_form()
+            form_field = form.get_field(field.id)
+        except Exception:  # noqa: BLE001
+            pass
+
+        columns = build_columns(field, form_field)
+        proxy = TableProxy(self, field, columns, [])
+        proxy._rows = build_rows(proxy, field)
+        self._tables[field.id] = proxy
+        return proxy
+
     def discard(self) -> TaskContext:
-        """Drop all uncommitted ``fill()``-s without sending them."""
+        """Drop all uncommitted ``fill()``-s and table edits without sending them."""
         self._pending.clear()
+        self._tables.clear()
         return self
 
     # ------------------------------------------------------------------
@@ -930,8 +1001,8 @@ class TaskContext:
     catalog_id = get_catalog_id
 
     def pending_count(self) -> int:
-        """Number of uncommitted ``set()``-s waiting to be flushed."""
-        return len(self._pending)
+        """Number of uncommitted changes (``set()``-s + dirty tables) waiting to flush."""
+        return len(self._pending) + sum(1 for t in self._tables.values() if t._dirty)
 
     def __repr__(self) -> str:
         return (
@@ -1043,13 +1114,21 @@ class TaskContext:
         )
 
     async def _flush(self) -> list[dict]:
-        """Resolve pending (field, value) → list[dict] for the API. Clears queue."""
-        if not self._pending:
-            return []
+        """Resolve pending (field, value) + table edits → list[dict] for the API.
+
+        Clears the scalar-field queue and resets each table's dirty flag.
+        """
         updates: list[dict] = []
         for field, value in self._pending:
             updates.append(await self._resolve(field, value))
         self._pending.clear()
+
+        # Table edits (ctx.table("...") proxies)
+        for proxy in self._tables.values():
+            table_update = await proxy._build_update()
+            if table_update is not None:
+                updates.append(table_update)
+                proxy._dirty = False
         return updates
 
     async def _resolve(self, field: FormField, value: Any) -> dict:

@@ -393,7 +393,7 @@ class Dispatcher(Router):
                            base_url="https://pyrus.corp.ru")
             dp = Dispatcher()
 
-            @dp.task_received(ApprovalPendingFilter(141636))
+            @dp.task_received(ApprovalPendingFilter(100500))
             async def on_approval(ctx: TaskContext):
                 # notify manager
                 ...

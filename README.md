@@ -118,6 +118,65 @@ Python 3.10+
 | `await ctx.reassign("Имя")` | Переназначить (имя → person_id) |
 | `await ctx.log_time(90, "текст")` | Списать время (минуты) |
 | `await ctx.reply(comment_id, "текст")` | Ответить на комментарий (тред) |
+| `await ctx.table("Таблица")` | Открыть поле-таблицу как DataFrame (см. ниже) |
+
+## Таблицы — как DataFrame
+
+Поле типа «таблица» открывается через `await ctx.table("Имя")` и работает
+**по именам колонок** — без знания `row_id`, `col_id` и форматов ячеек.
+Значения резолвятся автоматически (имя человека → `person_id`,
+`True/False` → галочка, строка каталога → `item_id`). Правки ленивые —
+уходят одним запросом при `ctx.answer()`, вместе с обычными `fill()`.
+
+```python
+ctx = await client.task_context(12345678)
+tbl = await ctx.table("План работ")
+
+# ── Чтение — как pandas / список ──
+print(tbl.columns)          # ['Что сделать', 'Ответственный', 'Выполнено']
+print(len(tbl))             # 7
+print(tbl)                  # красивый ASCII-рендер всей таблицы
+for row in tbl:
+    print(row["Что сделать"], "→", row["Ответственный"], row["Выполнено"])
+
+# ── Фильтрация — как SQLAlchemy ──
+todo = tbl.where(**{"Выполнено": False})          # bool → точное совпадение
+mine = tbl.where(**{"Ответственный": "Колбасенко"})  # str → подстрока
+row  = tbl.find(**{"Что сделать": "Ревью задачи"})
+
+# ── Правка — как Excel ──
+row["Выполнено"] = True                            # отметить галочку
+for r in tbl.where(**{"Выполнено": False}):
+    r["Ответственный"] = "Данил Колбасенко"        # имя → person_id авто
+
+# ── Добавить / удалить строку ──
+tbl.add(**{
+    "Что сделать": "03/26 Новая задача",
+    "Ответственный": "Данил Колбасенко",
+    "Выполнено": False,
+})
+tbl.find(**{"Что сделать": "устаревшая запись"}).delete()
+
+# ── Отправка — всё одним запросом ──
+await ctx.answer("Обновил план")
+```
+
+| Метод | Описание |
+|---|---|
+| `await ctx.table("Имя")` | Открыть таблицу (кешируется, повторный вызов — тот же объект) |
+| `tbl.columns` | Список имён колонок |
+| `tbl[i]` / `for row in tbl` / `len(tbl)` | Доступ по индексу / итерация / размер |
+| `tbl.where(**{"Колонка": значение})` | Фильтр (str — подстрока, bool/число — точно) |
+| `tbl.find(**{...})` | Первая строка под условие, или `None` |
+| `row["Колонка"]` | Чтение ячейки (по имени) |
+| `row["Колонка"] = value` | Правка ячейки (ленивая, авторезолв) |
+| `row.update({...})` | Несколько ячеек сразу |
+| `tbl.add(**{...})` | Добавить строку |
+| `row.delete()` / `tbl.remove(row)` / `tbl.clear()` | Удалить строку(и) |
+| `tbl.to_records()` | Список словарей (как `DataFrame.to_dict('records')`) |
+
+Имена колонок с пробелами передавай через `**{"Имя колонки": значение}`.
+Полный пример — [`examples/14_table_editing.py`](examples/14_table_editing.py).
 
 ## Бот на вебхуках
 
@@ -426,13 +485,13 @@ async with mock as client:
 
 ```python
 # Пересогласование (вернуть шаг в «ожидание»)
-await client.comment_task(task_id, approvals_rerequested=[[141636]])
+await client.comment_task(task_id, approvals_rerequested=[[100500]])
 
 # Добавить согласующего на этап
-await client.comment_task(task_id, approvals_added=[[{"id": 141636}]])
+await client.comment_task(task_id, approvals_added=[[{"id": 100500}]])
 
 # Убрать согласующего с этапа
-await client.comment_task(task_id, approvals_removed=[{"id": 141636}])
+await client.comment_task(task_id, approvals_removed=[{"id": 100500}])
 ```
 
 Боты Pyrus комбинируют `approvals_removed` + `approvals_added` для переключения задачи между этапами.
@@ -576,6 +635,7 @@ client = UserClient(
 | [`11_http_integration.py`](examples/11_http_integration.py) | HTTP-сервер для внешних систем (PHP, 1C и др.) |
 | [`12_embed_in_project.py`](examples/12_embed_in_project.py) | Встраивание aiopyrus в FastAPI / Django / Celery |
 | [`13_debug_logging.py`](examples/13_debug_logging.py) | Дебаг: какие запросы шлёт библиотека (URL, body, статус, тайминг) |
+| [`14_table_editing.py`](examples/14_table_editing.py) | Таблицы как DataFrame: чтение, where/find, правка, add/delete строк |
 
 ## FAQ
 

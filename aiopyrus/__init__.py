@@ -192,6 +192,7 @@ from .types import (
 from .user.client import UserClient
 from .utils.context import TaskContext
 from .utils.fields import FieldUpdate, format_mention, get_flat_fields, select_fields
+from .utils.table import Column, Row, TableProxy
 
 try:
     from importlib.metadata import version as _pkg_version
@@ -264,6 +265,10 @@ __all__ = [
     "get_flat_fields",
     "format_mention",
     "select_fields",
+    # Tables (DataFrame-style editing)
+    "TableProxy",
+    "Row",
+    "Column",
     # Testing
     "create_mock_client",
     # Exceptions
