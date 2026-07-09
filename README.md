@@ -261,7 +261,33 @@ from aiopyrus import FormFilter, StepFilter, FieldValueFilter, EventFilter, F
 # Временные (для polling)
 from aiopyrus.bot.filters import ModifiedAfterFilter, CreatedAfterFilter
 @router.task_received(ModifiedAfterFilter())  # только задачи, изменённые после старта бота
+
+# По ожидающему согласованию (approver — person_id ИЛИ role_id)
+from aiopyrus import ApprovalPendingFilter
+@router.task_received(ApprovalPendingFilter(5555))                    # текущий шаг
+@router.task_received(ApprovalPendingFilter([5555, 6666]))            # любой из списка (OR)
+@router.task_received(ApprovalPendingFilter([5555, 6666], any_step=True))  # на ЛЮБОМ шаге маршрута
 ```
+
+> **Роли vs люди:** если согласование назначено на роль, передавай в
+> `ApprovalPendingFilter` **role_id**, а не person_id членов роли
+> (`await client.get_roles()`).
+
+### Поиск задач на согласовании без бота
+
+`ApprovalPendingFilter` — бот-фильтр (работает с `payload.task`).
+Для поиска по реестру от имени `UserClient` (реестр не отдаёт `approvals`)
+есть helper — он делает two-step (`get_registers` → `get_tasks` → фильтр):
+
+```python
+# Задачи форм 321 и 322, ждущие согласования у роли 5555 или 6666
+tasks = await client.find_pending_approvals([5555, 6666], forms=[321, 322])
+for t in tasks:
+    print(t.id, t.current_step, t.get_approver_names(t.current_step))
+```
+
+Для cross-form поиска без перечисления форм — `client.search_tasks_internal(approver_ids=[...])`
+(внутренний WCF-эндпоинт, experimental).
 
 ## Middleware
 

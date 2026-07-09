@@ -94,6 +94,30 @@ async def _iter_json_array(chunks: AsyncIterator[str], key: str) -> AsyncIterato
                 break  # incomplete object — need more data
 
 
+def _task_has_pending_approver(task: Task, ids: set[int], *, any_step: bool) -> bool:
+    """True if any of *ids* is a waiting approver on the task.
+
+    Same matching logic as :class:`~aiopyrus.bot.filters.ApprovalPendingFilter`.
+    ``any_step=False`` checks only the current step; ``True`` checks all steps.
+    """
+    if not task.approvals:
+        return False
+    if any_step:
+        steps_to_check = task.approvals
+    else:
+        if not task.current_step:
+            return False
+        idx = task.current_step - 1
+        if idx >= len(task.approvals):
+            return False
+        steps_to_check = [task.approvals[idx]]
+    return any(
+        entry.person.id in ids and entry.is_waiting
+        for step_entries in steps_to_check
+        for entry in step_entries
+    )
+
+
 class UserClient:
     """Full Pyrus API client acting on behalf of a user.
 
@@ -1308,6 +1332,74 @@ class UserClient:
 
         log.debug("← %d  keys=%s", response.status_code, list(data.keys()))
         return data
+
+    async def find_pending_approvals(
+        self,
+        approver_ids: int | list[int],
+        *,
+        forms: int | list[int],
+        steps: list[int] | int | None = None,
+        any_step: bool = True,
+    ) -> list[Task]:
+        """Найти задачи, ожидающие согласования у указанных approver.
+
+        Find tasks pending approval by the given person/role IDs.
+
+        Реестр (``GET /forms/{id}/register``) **не отдаёт** ``approvals``,
+        поэтому фильтрация по approver на уровне реестра невозможна напрямую.
+        Этот helper делает two-step:
+
+        1. ``get_registers(forms, steps)`` — собрать задачи форм (без approvals);
+        2. ``get_tasks(...)`` — обогатить каждую полными данными (с approvals);
+        3. отфильтровать по approver, ожидающему согласования.
+
+        Args:
+            approver_ids: Один ID или список (person_id **или** role_id).
+                Совпадение по любому из них (OR). Если согласование назначено
+                на роль — передавай **role_id**, не person_id членов роли.
+            forms: Форма или список форм для поиска (обязательно —
+                реестр требует ``form_id``). Для cross-form поиска без
+                перечисления форм см. :meth:`search_tasks_internal`.
+            steps: Ограничить шагами реестра (ускоряет — меньше задач
+                на обогащение). ``None`` — все шаги.
+            any_step: Если ``True`` (по умолчанию) — approver ждёт на
+                **любом** шаге маршрута. ``False`` — только на текущем шаге
+                задачи.
+
+        Returns:
+            Список ``Task`` (обогащённых, с ``approvals``), где хотя бы один
+            из ``approver_ids`` ожидает согласования.
+
+        Example::
+
+            # Все задачи форм 321 и 322, ждущие согласования у роли 5555 или 6666
+            tasks = await client.find_pending_approvals(
+                [5555, 6666], forms=[321, 322]
+            )
+            for t in tasks:
+                print(t.id, t.current_step, t.get_approver_names(t.current_step))
+        """
+        ids: set[int] = {approver_ids} if isinstance(approver_ids, int) else set(approver_ids)
+        form_ids = [forms] if isinstance(forms, int) else list(forms)
+        step_list = [steps] if isinstance(steps, int) else steps
+
+        # 1. Реестры форм (без approvals) — параллельно
+        regs = await self.get_registers(form_ids, steps=step_list)
+        task_ids: list[int] = []
+        for tasks in regs.values():
+            task_ids.extend(t.id for t in tasks)
+        if not task_ids:
+            return []
+
+        # 2. Обогатить полными данными (approvals) — батч
+        enriched = await self.get_tasks(task_ids)
+
+        # 3. Фильтр по approver, ожидающему согласования
+        result: list[Task] = []
+        for task in enriched:
+            if _task_has_pending_approver(task, ids, any_step=any_step):
+                result.append(task)
+        return result
 
     async def get_form_permissions(self, form_id: int) -> dict[str, Any]:
         """GET /forms/{form_id}/permissions."""

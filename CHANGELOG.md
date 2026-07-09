@@ -5,6 +5,35 @@ All notable changes to **aiopyrus** will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---
+## [0.9.2] — 2026-07-01
+
+### Добавлено — поиск задач по ожидающему approver
+
+- **`ApprovalPendingFilter(ids, any_step=True)`** — новый параметр.
+  По умолчанию фильтр проверяет **только текущий шаг** задачи
+  (`task.approvals[current_step - 1]`). С `any_step=True` ищет по
+  **всем** шагам маршрута — approver может ждать согласования на
+  любом шаге, даже если задача до него ещё не дошла.
+
+  Это устраняет частую путаницу «фильтр не работает со списком ID»:
+  сам список (OR по нескольким person/role ID) работал и раньше, но
+  когда approver'ы распределены по разным шагам, дефолтная проверка
+  только текущего шага находила лишь часть — теперь есть `any_step`.
+
+- **`UserClient.find_pending_approvals(approver_ids, forms=, steps=, any_step=)`** —
+  helper для поиска задач на согласовании **на уровне реестра**
+  (без бота). Реестр не отдаёт `approvals`, поэтому helper делает
+  two-step: `get_registers(forms)` → `get_tasks(...)` (обогащение) →
+  фильтрация по approver, ожидающему согласования. `any_step`
+  по умолчанию `True`.
+
+Уточнения в docstring: `ApprovalPendingFilter` принимает person_id
+**или** role_id; если согласование назначено на роль — передавать
+`role_id`, а не person_id членов роли.
+
+Тесты: +11 (всего ~1047 passed).
+
+---
 ## [0.9.1] — 2026-06-25
 
 ### Добавлено — редактирование таблиц как DataFrame

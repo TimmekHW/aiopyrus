@@ -120,38 +120,68 @@ class ResponsibleFilter(Filter):
 
 
 class ApprovalPendingFilter(Filter):
-    """Match tasks where a specific person/role is waiting for approval on the current step.
+    """Match tasks where a given person/role is waiting for approval.
 
-    Checks that the given ID appears in ``task.approvals[current_step - 1]``
-    with ``approval_choice`` equal to ``waiting`` or ``None``.
+    Фильтр по approver, ожидающему согласования. Принимает **один ID**
+    или **список ID** (person_id или role_id) — совпадение по любому из
+    них (OR).
+
+    По умолчанию проверяется **только текущий шаг** задачи
+    (``task.approvals[current_step - 1]``). Передай ``any_step=True``,
+    чтобы искать по **всем** шагам маршрута — полезно, когда approver'ы
+    распределены по разным шагам и задача ещё до них не дошла.
+
+    **Важно про роли:** если согласование назначено на **роль**,
+    ``approvals`` содержит ``person`` с ``id`` = ID роли (не человека).
+    Тогда передавай сюда **role_id**, а не person_id членов роли.
+    Узнать роли — ``await client.get_roles()``.
+
+    ``waiting`` = ``approval_choice`` равен ``waiting`` или ``None``
+    (approver ещё не проголосовал). Уже проголосовавшие (approved /
+    rejected) не матчатся.
 
     Usage::
 
-        # Tasks pending approval by role 5555
+        # Задачи, ожидающие согласования у роли 5555 (текущий шаг)
         @router.task_received(ApprovalPendingFilter(5555))
         async def on_my_approval(ctx): ...
 
-        # Tasks pending approval by any of several roles
+        # Любой из нескольких approver — на текущем шаге
         @router.task_received(ApprovalPendingFilter([5555, 6666]))
         async def on_multi(ctx): ...
 
-        # Combine with form filter
+        # По ВСЕМ шагам маршрута (approver ждёт где угодно в задаче)
+        @router.task_received(ApprovalPendingFilter([5555, 6666], any_step=True))
+        async def on_any_step(ctx): ...
+
+        # Комбинация с фильтром формы
         @router.task_received(FormFilter(321) & ApprovalPendingFilter(5555))
         async def on_form_approval(ctx): ...
     """
 
-    def __init__(self, person_id: int | list[int]) -> None:
+    def __init__(self, person_id: int | list[int], *, any_step: bool = False) -> None:
         self._ids: set[int] = {person_id} if isinstance(person_id, int) else set(person_id)
+        self._any_step = any_step
 
     async def __call__(self, payload: WebhookPayload) -> bool:
         task = payload.task
-        if not task.approvals or not task.current_step:
+        if not task.approvals:
             return False
-        step_idx = task.current_step - 1
-        if step_idx >= len(task.approvals):
-            return False
+
+        if self._any_step:
+            steps_to_check = task.approvals  # все шаги маршрута
+        else:
+            if not task.current_step:
+                return False
+            step_idx = task.current_step - 1
+            if step_idx >= len(task.approvals):
+                return False
+            steps_to_check = [task.approvals[step_idx]]
+
         return any(
-            entry.person.id in self._ids and entry.is_waiting for entry in task.approvals[step_idx]
+            entry.person.id in self._ids and entry.is_waiting
+            for step_entries in steps_to_check
+            for entry in step_entries
         )
 
 
