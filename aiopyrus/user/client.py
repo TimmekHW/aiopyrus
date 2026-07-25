@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import pathlib
@@ -1332,6 +1333,85 @@ class UserClient:
 
         log.debug("← %d  keys=%s", response.status_code, list(data.keys()))
         return data
+
+    async def find_tasks_by_field(
+        self,
+        form_id: int,
+        field: int | str,
+        value: str,
+        *,
+        item_count: int | None = None,
+        include_archived: bool = True,
+    ) -> list[Task]:
+        """Найти задачи формы по значению поля (``GET /register?fld{id}=...``).
+
+        Find tasks of a form by a field value.
+
+        Использует документированный фильтр реестра ``fld{field_id}=value``.
+        Совпадение — **по префиксу** (``"ABC-00012"`` найдётся по ``"ABC-000"``,
+        но **не** по ``"0012"``), регистр учитывается сервером.
+
+        Args:
+            form_id: ID формы, в которой ищем.
+            field: ID поля (``int``) или его **имя** из интерфейса (``str``) —
+                имя резолвится в ID через определение формы.
+            value: Значение (или его начало) для поиска.
+            item_count: Максимум задач в ответе.
+            include_archived: Включать закрытые/архивные задачи (по умолчанию да —
+                связанные задачи часто уже закрыты).
+
+        Returns:
+            Список найденных ``Task`` (данные реестра — без ``approvals``).
+
+        Raises:
+            KeyError: имя поля не найдено в определении формы.
+
+        Example::
+
+            # По ID поля
+            tasks = await client.find_tasks_by_field(321, 295, "ABC-00012")
+
+            # По имени поля
+            tasks = await client.find_tasks_by_field(321, "Номер тикета", "ABC-00012")
+        """
+        field_id = await self._resolve_field_id(form_id, field)
+        params: dict[str, Any] = {f"fld{field_id}": value}
+        if item_count is not None:
+            params["item_count"] = item_count
+        if include_archived:
+            params["include_archived"] = "y"
+        data = await self._session.get(f"forms/{form_id}/register", params=params)
+        return [Task.model_validate(t) for t in data.get("tasks", [])]
+
+    async def _resolve_field_id(self, form_id: int, field: int | str) -> int:
+        """Field ID as-is, or resolve a field **name** via the form definition."""
+        if isinstance(field, int):
+            return field
+        form = await self.get_form(form_id)
+
+        def walk(fields: list[Any]) -> int | None:
+            for f in fields:
+                if (f.name or "") == field or (f.code or "") == field:
+                    return f.id
+                info = f.info if isinstance(f.info, dict) else {}
+                sub_raw = info.get("fields") or []
+                from aiopyrus.types.form import FormField as FF
+
+                sub: list[Any] = []
+                for s in sub_raw:
+                    if isinstance(s, dict):
+                        with contextlib.suppress(Exception):
+                            sub.append(FF.model_validate(s))
+                if sub:
+                    got = walk(sub)
+                    if got is not None:
+                        return got
+            return None
+
+        found = walk(form.fields)
+        if found is None:
+            raise KeyError(f"Field {field!r} not found in form {form_id}.")
+        return found
 
     async def find_pending_approvals(
         self,

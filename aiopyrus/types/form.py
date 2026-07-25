@@ -80,8 +80,20 @@ class TitleValue(PyrusModel):
 
 
 class FormLinkValue(PyrusModel):
-    """Value structure for ``form_link`` fields."""
+    """Value structure for ``form_link`` fields.
 
+    Значение поля-ссылки на задачу другой формы. Pyrus возвращает::
+
+        {"task_id": 12345678,
+         "task_ids": [12345678],
+         "subject": "Заголовок связанной задачи | ... | ..."}
+
+    ``subject`` — человекочитаемый заголовок, который показывается
+    в интерфейсе (склеивается Pyrus из полей связанной формы).
+    """
+
+    # Одиночная ссылка (Pyrus отдаёт и task_id, и task_ids)
+    task_id: int | None = None
     task_ids: list[int] | None = None
     subject: str | None = None
 

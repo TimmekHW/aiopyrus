@@ -310,6 +310,19 @@ def _read_field(field: FormField) -> Any:
     if ftype == "file":
         return field.as_files()
 
+    if ftype == "form_link":
+        # Читаем как заголовок связанной задачи (то, что видно в интерфейсе).
+        # ID связанной задачи — ctx.get_value_id(), сама задача — await ctx.linked_task().
+        fl = field.as_form_link()
+        if fl:
+            if fl.subject:
+                return fl.subject
+            if fl.task_id is not None:
+                return fl.task_id
+            if fl.task_ids:
+                return fl.task_ids[0] if len(fl.task_ids) == 1 else fl.task_ids
+        return None
+
     # text, email, phone, note, number, money, date, time,
     # due_date, due_date_time, step, status, creation_date, …
     return field.value
@@ -557,6 +570,185 @@ class TaskContext:
         proxy._rows = build_rows(proxy, field)
         self._tables[field.id] = proxy
         return proxy
+
+    async def linked_form_id(self, field_name: str) -> int:
+        """ID формы, на которую ссылается поле-ссылка (``form_link``).
+
+        Берётся из определения формы (``info["form_id"]``) — в самой задаче
+        этой информации нет.
+
+        Example::
+
+            fid = await ctx.linked_form_id("Связанная заявка")   # → 322
+
+        Raises:
+            KeyError:  поле не найдено в задаче.
+            TypeError: поле не является ``form_link``.
+            ValueError: связанная форма не указана в определении формы.
+        """
+        field = self._task.get_field(field_name)
+        if field is None:
+            raise KeyError(
+                f"Field {field_name!r} not found in task {self._task.id}. "
+                f"Use task.find_fields(name='{field_name}') to inspect."
+            )
+        ftype = field.type.value if field.type else None
+        if ftype != "form_link":
+            raise TypeError(f"Field {field_name!r} (id={field.id}) is {ftype!r}, not 'form_link'.")
+
+        form = await self._get_form()
+        form_field = form.get_field(field.id)
+        linked = (
+            form_field.info.get("form_id")
+            if form_field and isinstance(form_field.info, dict)
+            else None
+        )
+        if linked is None:
+            raise ValueError(
+                f"Linked form_id not found for field {field.id} ({field_name!r}) "
+                f"in form {self._task.form_id}."
+            )
+        return linked
+
+    async def linked_task(self, field_name: str) -> Task | None:
+        """Загрузить **связанную задачу** из поля-ссылки (``form_link``).
+
+        Load the task referenced by a ``form_link`` field.
+
+        ``ctx["Поле"]`` даёт только заголовок (``subject``), а этот метод
+        возвращает саму связанную :class:`Task` целиком — с её полями,
+        комментариями и согласованиями.
+
+        Returns ``None``, если ссылка пуста.
+
+        Example::
+
+            linked = await ctx.linked_task("Связанная заявка")
+            if linked is not None:
+                lctx = linked.context(client)
+                print(lctx["Номер тикета"], lctx["Статус"])
+
+        Raises:
+            KeyError:  поле не найдено в задаче.
+            TypeError: поле не является ``form_link``.
+        """
+        field = self._task.get_field(field_name)
+        if field is None:
+            raise KeyError(
+                f"Field {field_name!r} not found in task {self._task.id}. "
+                f"Use task.find_fields(name='{field_name}') to inspect."
+            )
+        ftype = field.type.value if field.type else None
+        if ftype != "form_link":
+            raise TypeError(f"Field {field_name!r} (id={field.id}) is {ftype!r}, not 'form_link'.")
+
+        fl = field.as_form_link()
+        if fl is None:
+            return None
+        task_id = fl.task_id
+        if task_id is None and fl.task_ids:
+            task_id = fl.task_ids[0]
+        if task_id is None:
+            return None
+        return await self._client.get_task(task_id)
+
+    async def linked_tasks(self, field_name: str) -> list[Task]:
+        """Все связанные задачи поля-ссылки (когда ссылок несколько).
+
+        Пустой список, если ссылок нет.
+        """
+        field = self._task.get_field(field_name)
+        if field is None:
+            raise KeyError(f"Field {field_name!r} not found in task {self._task.id}.")
+        ftype = field.type.value if field.type else None
+        if ftype != "form_link":
+            raise TypeError(f"Field {field_name!r} (id={field.id}) is {ftype!r}, not 'form_link'.")
+        fl = field.as_form_link()
+        if fl is None:
+            return []
+        ids = list(fl.task_ids or ([] if fl.task_id is None else [fl.task_id]))
+        if not ids:
+            return []
+        return await self._client.get_tasks(ids)
+
+    async def search_link(
+        self,
+        field_name: str,
+        query: str,
+        *,
+        search_field: int | str | None = None,
+        limit: int = 10,
+    ) -> list[Task]:
+        """Найти кандидатов для поля-ссылки — как автодополнение в интерфейсе.
+
+        Search candidate tasks for a ``form_link`` field — like the UI autocomplete.
+
+        Ищет в **связанной форме** задачи, у которых значение поля начинается
+        с *query* (серверный фильтр реестра — совпадение по префиксу).
+
+        Args:
+            field_name: Имя поля-ссылки в текущей задаче.
+            query: Строка поиска (начало значения).
+            search_field: По какому полю связанной формы искать — ID или имя.
+                ``None`` — автоподбор: сначала текстовые поля, в названии
+                которых есть «номер» / «number» / «id» / «код» / «№»,
+                затем остальные текстовые поля.
+            limit: Максимум кандидатов.
+
+        Example::
+
+            # Что предложит автодополнение
+            for t in await ctx.search_link("Связанная заявка", "ABC-001"):
+                print(t.id, t.text)
+        """
+        linked_form = await self.linked_form_id(field_name)
+        if search_field is not None:
+            return await self._client.find_tasks_by_field(
+                linked_form, search_field, query, item_count=limit
+            )
+
+        # Автоподбор поля: приоритет «номерным» текстовым полям
+        form = await self._client.get_form(linked_form)
+        candidates: list[tuple[int, int, str]] = []  # (priority, field_id, name)
+        _HINTS = ("номер", "number", "код", "code", "id", "№", "ticket", "тикет")
+
+        def walk(fields: list[Any]) -> None:
+            for f in fields:
+                ft = f.type.value if f.type else None
+                if ft in ("text", "number"):
+                    name = (f.name or "").lower()
+                    prio = 0 if any(h in name for h in _HINTS) else 1
+                    candidates.append((prio, f.id, f.name or ""))
+                info = f.info if isinstance(f.info, dict) else {}
+                sub_raw = info.get("fields") or []
+                if sub_raw:
+                    from aiopyrus.types.form import FormField as FF
+
+                    sub: list[Any] = []
+                    for s in sub_raw:
+                        if isinstance(s, dict):
+                            with contextlib.suppress(Exception):
+                                sub.append(FF.model_validate(s))
+                    if sub:
+                        walk(sub)
+
+        walk(form.fields)
+        candidates.sort(key=lambda x: (x[0], x[1]))
+
+        # Пробуем поля по очереди, останавливаемся на первом, где что-то нашлось
+        for _prio, fid, fname in candidates[:12]:
+            try:
+                found = await self._client.find_tasks_by_field(
+                    linked_form, fid, query, item_count=limit
+                )
+            except Exception:  # noqa: BLE001
+                continue
+            if found:
+                log.debug(
+                    "search_link(%r, %r): matched via field %d (%s)", field_name, query, fid, fname
+                )
+                return found
+        return []
 
     def discard(self) -> TaskContext:
         """Drop all uncommitted ``fill()``-s and table edits without sending them."""
@@ -909,9 +1101,12 @@ class TaskContext:
 
         if ftype == "form_link":
             fl = field.as_form_link()
-            if fl and fl.task_ids:
-                return fl.task_ids
-            raise ValueError(f"Field {field_name!r} has no task_ids.")
+            if fl:
+                if fl.task_id is not None:
+                    return fl.task_id
+                if fl.task_ids:
+                    return fl.task_ids[0] if len(fl.task_ids) == 1 else fl.task_ids
+            raise ValueError(f"Field {field_name!r} has no task_id / task_ids.")
 
         raise TypeError(
             f"Field {field_name!r} (type={ftype!r}) does not have "
@@ -1203,6 +1398,43 @@ class TaskContext:
                     f"Pass item_id as int to set by ID."
                 )
             return FieldUpdate.catalog(field.id, item.item_id)
+
+        # --- form_link: accept task_id (int), list of ids, or a search string ---
+        if ftype == "form_link":
+            # int / list[int] — прямые ID связанных задач
+            if isinstance(value, int):
+                return {"id": field.id, "value": {"task_id": value, "task_ids": [value]}}
+            if isinstance(value, (list, tuple)) and all(isinstance(v, int) for v in value):
+                ids = list(value)
+                return {
+                    "id": field.id,
+                    "value": {"task_ids": ids, **({"task_id": ids[0]} if ids else {})},
+                }
+            if isinstance(value, str):
+                # Числовая строка — это task_id (частый кейс: ID пришёл из БД/CSV)
+                stripped = value.strip()
+                if stripped.lstrip("-").isdigit():
+                    tid = int(stripped)
+                    return {"id": field.id, "value": {"task_id": tid, "task_ids": [tid]}}
+                # Иначе — автодополнение: ищем задачу в связанной форме
+                found = await self.search_link(field.name or "", stripped, limit=5)
+                if not found:
+                    raise ValueError(
+                        f"Linked task {value!r} not found for field {field.name!r} "
+                        f"(id={field.id}).\n"
+                        f"Search is a prefix match on the linked form's fields — "
+                        f"try the beginning of the value, or pass the task_id as int.\n"
+                        f"To see candidates: await ctx.search_link({field.name!r}, {value!r})"
+                    )
+                if len(found) > 1:
+                    matches = ", ".join(f"{t.id} ({(t.text or '')[:60]})" for t in found[:5])
+                    raise ValueError(
+                        f"Ambiguous linked task {value!r} for field {field.name!r}: "
+                        f"{len(found)} matches — {matches}.\n"
+                        f"Use a longer prefix or pass the task_id as int."
+                    )
+                tid = found[0].id
+                return {"id": field.id, "value": {"task_id": tid, "task_ids": [tid]}}
 
         # --- everything else: delegate to typed FieldUpdate factory ---
         return FieldUpdate.from_field(field, value)
