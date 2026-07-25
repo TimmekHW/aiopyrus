@@ -13,12 +13,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/ruff-action@v3
+      - uses: actions/setup-python@v5
         with:
-          args: check
-      - uses: astral-sh/ruff-action@v3
-        with:
-          args: format --check
+          python-version: "3.12"
+      # Ставим ruff напрямую вместо astral-sh/ruff-action: внешний action
+      # уже ломал pipeline (см. историю с setup-uv), а фиксированная версия
+      # даёт ровно то же поведение локально и в CI.
+      - run: pip install "ruff==0.16.0"
+      - run: ruff check aiopyrus tests examples
+      - run: ruff format --check aiopyrus tests examples
 
   pyright:
     name: Pyright
