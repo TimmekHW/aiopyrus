@@ -486,6 +486,7 @@ class Dispatcher(Router):
         path: str = "/",
         verify_signature: bool = True,
         save_webhooks_dir: str | None = None,
+        max_request_size: int | None = None,
         on_startup: Any = None,
         on_shutdown: Any = None,
     ) -> None:
@@ -507,6 +508,19 @@ class Dispatcher(Router):
             If set, archive **every** incoming webhook to this directory,
             one sub-folder per task id (see :func:`save_raw_webhook`).
             ``None`` (default) disables archiving.
+        max_request_size:
+            Max webhook body size in bytes (default 16 MiB). Pyrus rarely
+            sends webhooks over 2 MiB, but it happens on large tasks — the
+            old 1 MiB aiohttp default silently rejected them with 413.
+
+            Макс. размер тела вебхука в байтах (по умолчанию 16 МиБ).
+            Не забудьте поднять и лимит реверс-прокси
+            (``client_max_body_size`` в nginx / Angie)::
+
+                await dp.start_webhook(
+                    bot, port=8080, path="/pyrus",
+                    max_request_size=64 * 1024 * 1024,  # 64 МиБ
+                )
         on_startup / on_shutdown:
             Optional async callables executed at server start/stop.
         """
@@ -518,6 +532,7 @@ class Dispatcher(Router):
             path=path,
             verify_signature=verify_signature,
             save_webhooks_dir=save_webhooks_dir,
+            max_request_size=max_request_size,
         )
 
         if on_startup:

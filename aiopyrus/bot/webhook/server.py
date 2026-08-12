@@ -17,6 +17,10 @@ if TYPE_CHECKING:
 
 log = logging.getLogger("aiopyrus.webhook")
 
+# aiohttp's own default is 1 MiB — Pyrus occasionally sends webhooks larger
+# than that (big tasks with many comments/fields), which silently became 413.
+_DEFAULT_MAX_REQUEST_SIZE = 16 * 1024 * 1024  # 16 MiB
+
 
 def create_app(
     *,
@@ -25,6 +29,7 @@ def create_app(
     path: str = "/",
     verify_signature: bool = True,
     save_webhooks_dir: str | Path | None = None,
+    max_request_size: int | None = None,
 ) -> web.Application:
     """Build an aiohttp Application for the Pyrus webhook endpoint.
 
@@ -34,13 +39,25 @@ def create_app(
         If set, **every** incoming webhook (including retries and malformed
         bodies) is archived to this directory, one sub-folder per task id.
         ``None`` (default) disables archiving.
+    max_request_size:
+        Maximum accepted webhook body size in **bytes**. Bodies over the limit
+        are rejected with HTTP 413 (Pyrus will retry 3 times, then drop the
+        event). Default — 16 MiB. Pyrus rarely sends webhooks over 2 MiB, but
+        it does happen on large tasks.
+
+        Максимальный размер тела вебхука в **байтах**. Всё, что больше,
+        отклоняется с HTTP 413 (Pyrus сделает 3 ретрая и бросит событие).
+        По умолчанию — 16 МиБ. Не забудьте поднять лимит и на реверс-прокси
+        (``client_max_body_size`` в nginx / Angie), если он стоит перед ботом.
     """
 
-    app = web.Application()
+    size_limit = max_request_size or _DEFAULT_MAX_REQUEST_SIZE
+    app = web.Application(client_max_size=size_limit)
     app["dispatcher"] = dispatcher
     app["bot"] = bot
     app["verify_signature"] = verify_signature
     app["save_webhooks_dir"] = save_webhooks_dir
+    app["max_request_size"] = size_limit
 
     app.router.add_post(path, _webhook_handler)
     return app
@@ -51,7 +68,19 @@ async def _webhook_handler(request: web.Request) -> web.Response:
     bot: PyrusBot = request.app["bot"]
     verify: bool = request.app["verify_signature"]
 
-    raw_body = await request.read()
+    try:
+        raw_body = await request.read()
+    except web.HTTPRequestEntityTooLarge:
+        # Body exceeded client_max_size — make the 413 loud, not silent:
+        # this is exactly the failure mode that is invisible in access logs.
+        log.error(
+            "Webhook body too large: Content-Length=%s exceeds max_request_size=%d bytes. "
+            "Increase create_app(max_request_size=...) / start_webhook(max_request_size=...) "
+            "and the reverse-proxy limit (nginx/Angie client_max_body_size).",
+            request.headers.get("Content-Length", "?"),
+            request.app["max_request_size"],
+        )
+        raise
     signature = request.headers.get("X-Pyrus-Sig", "")
     retry = request.headers.get("X-Pyrus-Retry", "")
 

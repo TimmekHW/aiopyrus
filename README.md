@@ -202,6 +202,21 @@ dp.include_router(router)
 asyncio.run(dp.start_webhook(bot, host="0.0.0.0", port=8080, path="/pyrus"))
 ```
 
+### Лимит размера вебхука
+
+Pyrus изредка присылает вебхуки больше 2 МБ (задачи с длинной историей).
+Сервер принимает до **16 МиБ** по умолчанию; лимит настраивается:
+
+```python
+asyncio.run(dp.start_webhook(
+    bot, port=8080, path="/pyrus",
+    max_request_size=64 * 1024 * 1024,  # 64 МиБ
+))
+```
+
+Если перед ботом стоит nginx / Angie — поднимите лимит и там
+(`client_max_body_size 16m;`), иначе 413 вернёт прокси, не дойдя до бота.
+
 ## Бот на polling (без публичного сервера)
 
 ```python

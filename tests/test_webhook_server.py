@@ -16,6 +16,7 @@ def _make_app(
     verify_signature: bool = False,
     process_webhook_result: dict | None = None,
     process_webhook_side_effect: Exception | None = None,
+    max_request_size: int | None = None,
 ) -> tuple[web.Application, MagicMock, MagicMock]:
     """Create a test app with mocked bot and dispatcher."""
     bot = MagicMock()
@@ -27,7 +28,13 @@ def _make_app(
     else:
         dp.process_webhook = AsyncMock(return_value=process_webhook_result or {})
 
-    app = create_app(dispatcher=dp, bot=bot, path="/pyrus", verify_signature=verify_signature)
+    app = create_app(
+        dispatcher=dp,
+        bot=bot,
+        path="/pyrus",
+        verify_signature=verify_signature,
+        max_request_size=max_request_size,
+    )
     return app, bot, dp
 
 
@@ -88,6 +95,42 @@ class TestWebhookHandler:
                 headers={"X-Pyrus-Retry": "1"},
             )
             assert resp.status == 200
+
+
+class TestRequestSizeLimit:
+    """Пайрус изредка шлёт вебхуки >2 МБ — дефолт aiohttp в 1 МиБ давал 413."""
+
+    async def test_two_mb_body_accepted_by_default(self):
+        """2 МБ (реальный кейс с корп Pyrus) должно проходить с дефолтом."""
+        app, bot, dp = _make_app()
+        async with TestClient(TestServer(app)) as client:
+            payload = b'{"event": "comment", "pad": "' + b"x" * (2 * 1024 * 1024) + b'"}'
+            resp = await client.post("/pyrus", data=payload)
+            assert resp.status == 200
+            dp.process_webhook.assert_called_once()
+
+    async def test_body_over_custom_limit_returns_413(self):
+        app, bot, dp = _make_app(max_request_size=1024)  # 1 КБ
+        async with TestClient(TestServer(app)) as client:
+            payload = b'{"pad": "' + b"x" * 4096 + b'"}'
+            resp = await client.post("/pyrus", data=payload)
+            assert resp.status == 413
+            dp.process_webhook.assert_not_called()
+
+    async def test_custom_limit_allows_large_body(self):
+        app, bot, dp = _make_app(max_request_size=64 * 1024 * 1024)
+        async with TestClient(TestServer(app)) as client:
+            payload = b'{"pad": "' + b"x" * (3 * 1024 * 1024) + b'"}'
+            resp = await client.post("/pyrus", data=payload)
+            assert resp.status == 200
+
+    def test_default_limit_is_16_mib(self):
+        app, _, _ = _make_app()
+        assert app["max_request_size"] == 16 * 1024 * 1024
+
+    def test_custom_limit_stored(self):
+        app, _, _ = _make_app(max_request_size=42_000_000)
+        assert app["max_request_size"] == 42_000_000
 
 
 class TestCreateApp:
